@@ -14,7 +14,7 @@ typedef struct {
     uint16_t slow_angle;
     uint16_t angle_reversed;
     /* PWM parameters (percent 0–100) */
-    uint16_t no_pwm;
+    uint16_t cutoff_pwm;
     uint16_t slow_start_pwm;
     uint16_t slow_pwm;
     uint16_t fast_pwm;
@@ -30,7 +30,7 @@ typedef struct {
     .dead_angle = 5, \
     .slow_angle = 20, \
     .angle_reversed = 0, \
-    .no_pwm = 30, \
+    .cutoff_pwm = 30, \
     .slow_start_pwm = 30, \
     .slow_pwm = 10, \
     .fast_pwm = 100, \
