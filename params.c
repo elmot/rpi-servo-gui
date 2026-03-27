@@ -30,7 +30,6 @@ static const param_entry_t param_table[] = {
     ENTRY(slow_angle),
     ENTRY(angle_reversed),
     ENTRY(cutoff_pwm),
-    ENTRY(slow_start_pwm),
     ENTRY(slow_pwm),
     ENTRY(fast_pwm),
     ENTRY(slow_start_ms),

@@ -31,7 +31,7 @@
     .bar-fill { height: 100%; border-radius: 3px; transition: width 0.1s; }
     .bar-row .val { width: 4em; font-family: monospace; }
     .bar-row input[type=range] { flex: 1; }
-    #angleWarning { color: #c00; font-weight: bold; font-size: 0.9em; min-height: 1.2em; margin: 0.3em 0; }
+    #angleWarning, #powerWarning { color: #c00; font-weight: bold; font-size: 0.9em; min-height: 1.2em; margin: 0.3em 0; }
     .check-row { margin: 0.4em 0; }
     .check-row label { font-size: 0.9em; }
     .check-row input[type=checkbox] { width: 2.3em; height: 2.3em; vertical-align: middle; }
@@ -85,14 +85,13 @@
     </div>
 
     <h3>Power</h3>
-    <div class="bar-row"><label>Minimum</label><div class="bar-bg"><div class="bar-fill" id="b_cutoff_pwm" style="width:30%;background:#888"></div></div><span class="val" id="v_cutoff_pwm">30</span>%</div>
-    <div class="slider-row"><label></label><input type="range" id="s_cutoff_pwm" min="0" max="100" value="30"></div>
-    <div class="bar-row"><label>Slow start</label><div class="bar-bg"><div class="bar-fill" id="b_slow_start_pwm" style="width:30%;background:#f90"></div></div><span class="val" id="v_slow_start_pwm">30</span>%</div>
-    <div class="slider-row"><label></label><input type="range" id="s_slow_start_pwm" min="0" max="100" value="30"></div>
-    <div class="bar-row"><label>Slow</label><div class="bar-bg"><div class="bar-fill" id="b_slow_pwm" style="width:10%;background:#09f"></div></div><span class="val" id="v_slow_pwm">10</span>%</div>
-    <div class="slider-row"><label></label><input type="range" id="s_slow_pwm" min="0" max="100" value="10"></div>
+    <div class="bar-row"><label>Minimum</label><div class="bar-bg"><div class="bar-fill" id="b_cutoff_pwm" style="width:50%;background:#888"></div></div><span class="val" id="v_cutoff_pwm">50</span>%</div>
+    <div class="slider-row"><label></label><input type="range" id="s_cutoff_pwm" min="0" max="100" value="50"></div>
+    <div class="bar-row"><label>Slow</label><div class="bar-bg"><div class="bar-fill" id="b_slow_pwm" style="width:70%;background:#09f"></div></div><span class="val" id="v_slow_pwm">70</span>%</div>
+    <div class="slider-row"><label></label><input type="range" id="s_slow_pwm" min="0" max="100" value="70"></div>
     <div class="bar-row"><label>Full</label><div class="bar-bg"><div class="bar-fill" id="b_fast_pwm" style="width:100%;background:#0c0"></div></div><span class="val" id="v_fast_pwm">100</span>%</div>
     <div class="slider-row"><label></label><input type="range" id="s_fast_pwm" min="0" max="100" value="100"></div>
+    <div id="powerWarning"></div>
 
     <h3>Timing</h3>
     <div class="bar-row"><label>Slow start</label><div class="bar-bg"><div class="bar-fill" id="b_slow_start_ms" style="width:20%;background:#c6f"></div></div><span class="val" id="v_slow_start_ms">200</span>ms</div>
@@ -116,14 +115,14 @@
   /* Editable param fields (sliders/checkbox) — order matches serialize output */
   const SLIDER_FIELDS = [
     'zero_restricted_angle','angle_tolerance','dead_angle','slow_angle',
-    'cutoff_pwm','slow_start_pwm','slow_pwm','fast_pwm','slow_start_ms'
+    'cutoff_pwm','slow_pwm','fast_pwm','slow_start_ms'
   ];
   const ANGLE_FIELDS = ['zero_restricted_angle','angle_tolerance','dead_angle','slow_angle'];
 
   const DEFAULTS = {
     zero_restricted_angle: 5, angle_tolerance: 2, dead_angle: 5, slow_angle: 20,
     angle_reversed: 0,
-    cutoff_pwm: 30, slow_start_pwm: 30, slow_pwm: 10, fast_pwm: 100, slow_start_ms: 200
+    cutoff_pwm: 50, slow_pwm: 70, fast_pwm: 100, slow_start_ms: 200
   };
 
   const MAX_LOG_LINES = 500;
@@ -191,6 +190,7 @@
     }
     drawAngleCircle();
     checkAngleWarnings();
+    checkPowerWarnings();
   }
 
   function updateDisplay(field, val) {
@@ -252,6 +252,18 @@
     document.getElementById('angleWarning').textContent = w.join('; ');
   }
 
+  const POWER_FIELDS = ['cutoff_pwm','slow_pwm','fast_pwm'];
+
+  function checkPowerWarnings() {
+    const cutoff = parseInt(document.getElementById('s_cutoff_pwm').value);
+    const slow = parseInt(document.getElementById('s_slow_pwm').value);
+    const fast = parseInt(document.getElementById('s_fast_pwm').value);
+    const w = [];
+    if (cutoff >= slow) w.push('cutoff must be < slow');
+    if (slow >= fast) w.push('slow must be < fast');
+    document.getElementById('powerWarning').textContent = w.join('; ');
+  }
+
   /* ---- Send params (throttled) ---- */
   function scheduleSend() {
     if (sendTimer || !device) return;
@@ -272,6 +284,7 @@
     s.addEventListener('input', () => {
       updateDisplay(f, s.value);
       if (ANGLE_FIELDS.includes(f)) { drawAngleCircle(); checkAngleWarnings(); }
+      if (POWER_FIELDS.includes(f)) { checkPowerWarnings(); }
       scheduleSend();
     });
   }

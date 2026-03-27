@@ -48,7 +48,7 @@ void servo_core1_entry(void) {
     gpio_pull_up(I2C_SDA_PIN);
     gpio_pull_up(I2C_SCL_PIN);
 
-    bool moving = true;
+    bool moving = false;
     while (1) {
         uint8_t status = (uint8_t)as560xGetStatus();
         if (!(status & AS560x_STATUS_MAGNET_DETECTED)) {
@@ -78,8 +78,7 @@ void servo_core1_entry(void) {
         if (angle_delta_abs > angle_tolerance) {
             gpio_put(LED_PIN, 1);
             moving = true;
-            int speed = (angle_delta_abs > g_params.slow_angle) ? g_params.fast_pwm : g_params.slow_pwm;
-            int motor_pwm = speed < g_params.cutoff_pwm ? 0 : speed;
+            int motor_pwm = (angle_delta_abs > g_params.slow_angle) ? g_params.fast_pwm : g_params.slow_pwm;
             if (angle_delta > 0) {
                 pwm_a = motor_pwm; pwm_b = 0;
             } else {
@@ -92,7 +91,7 @@ void servo_core1_entry(void) {
         }
         setMotorPwm(pwm_a, pwm_b);
 
-        g_telemetry.pwm_us = pwm_count;
+        g_telemetry.pwm_us = raw_pwm;
         g_telemetry.current_angle = (int16_t)angle;
         g_telemetry.target_angle = (int16_t)target_angle;
         g_telemetry.power_a = (int16_t)pwm_a;
