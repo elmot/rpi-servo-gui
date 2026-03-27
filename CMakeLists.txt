@@ -5,6 +5,8 @@ include(pico_sdk_import.cmake)
 
 project(rpi-servo-gui C CXX ASM)
 
+set(SERVO_VERSION "0.1")
+
 pico_sdk_init()
 
 add_executable(${CMAKE_PROJECT_NAME}
@@ -27,6 +29,10 @@ set_source_files_properties(index_htm_embed.S PROPERTIES
 
 target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     ${CMAKE_CURRENT_LIST_DIR}
+)
+
+target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE
+    SERVO_VERSION="${SERVO_VERSION}"
 )
 
 target_link_libraries(${CMAKE_PROJECT_NAME}

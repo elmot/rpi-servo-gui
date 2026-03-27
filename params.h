@@ -4,7 +4,9 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-#define PARAMS_VERSION "0.1"
+#ifndef SERVO_VERSION
+#define SERVO_VERSION "0.1"
+#endif
 
 typedef struct {
     /* Angle parameters (degrees) */

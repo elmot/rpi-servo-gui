@@ -40,7 +40,7 @@
 #define PARAMS_START_CLUSTER 2
 
 /* ---- File contents ---- */
-static const char file_parameters[] = "version=0.1\n";
+static const char file_parameters[] = "version=" SERVO_VERSION "\n";
 #define FILE_PARAMETERS_SIZE (sizeof(file_parameters) - 1)  /* 12 bytes */
 
 /* Embedded from index.htm via CMake objcopy */
@@ -161,7 +161,7 @@ static void generate_sector(uint32_t lba, uint8_t *buf) {
         entries[0].time = FAT_TIME;
 
         /* parameters.txt — read-only */
-        memcpy(entries[1].name, "PARAMS  TXT", 11);
+        memcpy(entries[1].name, "VERSION TXT", 11);
         entries[1].attr = 0x01 | 0x20;
         entries[1].date = FAT_DATE;
         entries[1].time = FAT_TIME;
@@ -259,5 +259,5 @@ void tud_msc_inquiry_cb(uint8_t lun, uint8_t vendor_id[8], uint8_t product_id[16
     (void)lun;
     memcpy(vendor_id,   "Elmot   ", 8);
     memcpy(product_id,  "Smart Servo     ", 16);
-    memcpy(product_rev, "0.1 ", 4);
+    snprintf((char*)product_rev, 5, "%-4s", SERVO_VERSION);
 }

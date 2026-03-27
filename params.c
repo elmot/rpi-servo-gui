@@ -41,7 +41,7 @@ static const param_entry_t param_table[] = {
 #define PARAM_COUNT (sizeof(param_table) / sizeof(param_table[0]))
 
 static int serialize_impl(char *buf, int maxlen, bool persist_only) {
-    int pos = snprintf(buf, maxlen, "version=%s\n", PARAMS_VERSION);
+    int pos = snprintf(buf, maxlen, "version=" SERVO_VERSION "\n");
     for (unsigned i = 0; i < PARAM_COUNT && pos < maxlen; i++) {
         if (persist_only && !param_table[i].persist) continue;
         uint16_t val = *(const volatile uint16_t *)((const char *)&g_params + param_table[i].offset);

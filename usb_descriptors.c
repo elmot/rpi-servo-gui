@@ -248,7 +248,7 @@ bool tud_vendor_control_xfer_cb(uint8_t rhport, uint8_t stage, const tusb_contro
 static const char *string_desc_arr[] = {
     (const char[]){0x09, 0x04},  /* Language ID: English US */
     "Elmot",                     /* 1: Manufacturer */
-    "Elmot Smart Servo",         /* 2: Product */
+    "Elmot Smart Servo v" SERVO_VERSION, /* 2: Product */
     "0001",                      /* 3: Serial */
     "Elmot Smart Servo",         /* 4: Vendor interface */
     "Elmot Servo Virtual Disk"         /* 5: MSC interface */
