@@ -68,7 +68,7 @@ static void log_task(void)
     if (tud_vendor_write(log_buf, (uint32_t)len) > 0)
     {
         tud_vendor_flush();
-        next_ms = now + 250;
+        next_ms = now + 150;
     }
 }
 
