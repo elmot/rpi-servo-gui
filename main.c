@@ -72,21 +72,31 @@ static void log_task(void)
     }
 }
 
+static char param_buf[256];
+static uint32_t param_buf_len = 0;
+
 static void process_param_writes(void)
 {
     if (!tud_vendor_available()) return;
 
-    char buf[256];
-    uint32_t total = 0;
-    while (tud_vendor_available() && total < sizeof(buf) - 1) {
-        total += tud_vendor_read(buf + total, sizeof(buf) - 1 - total);
+    /* Accumulate incoming data */
+    while (tud_vendor_available() && param_buf_len < sizeof(param_buf) - 1) {
+        param_buf_len += tud_vendor_read(param_buf + param_buf_len,
+                                         sizeof(param_buf) - 1 - param_buf_len);
     }
-    /* Drain overflow */
-    { uint8_t discard[64]; while (tud_vendor_available()) tud_vendor_read(discard, sizeof(discard)); }
 
-    if (total > 0) {
-        buf[total] = '\0';
-        params_deserialize(buf, (int)total);
+    /* Only parse when we have a complete message (ends with \n) */
+    if (param_buf_len > 0 && param_buf[param_buf_len - 1] == '\n') {
+        param_buf[param_buf_len] = '\0';
+        params_deserialize(param_buf, (int)param_buf_len);
+        param_buf_len = 0;
+    }
+
+    /* Drain overflow */
+    if (param_buf_len >= sizeof(param_buf) - 1) {
+        param_buf_len = 0;
+        uint8_t discard[64];
+        while (tud_vendor_available()) tud_vendor_read(discard, sizeof(discard));
     }
 }
 
