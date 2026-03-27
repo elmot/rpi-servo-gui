@@ -33,6 +33,8 @@ static const param_entry_t param_table[] = {
     ENTRY(slow_pwm),
     ENTRY(fast_pwm),
     ENTRY(slow_start_ms),
+    ENTRY(pwm_low_limit),
+    ENTRY(pwm_high_limit),
     ENTRY_VOLATILE(pwm_mock),
 };
 

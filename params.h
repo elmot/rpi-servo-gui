@@ -19,6 +19,9 @@ typedef struct {
     uint16_t fast_pwm;
     /* Timing (ms) */
     uint16_t slow_start_ms;
+    /* PWM input range (microseconds) */
+    uint16_t pwm_low_limit;
+    uint16_t pwm_high_limit;
     /* Debug: 0 = use real PWM input, nonzero = mock value in microseconds */
     uint16_t pwm_mock;
 } servo_params_t;
@@ -33,6 +36,8 @@ typedef struct {
     .slow_pwm = 70, \
     .fast_pwm = 100, \
     .slow_start_ms = 200, \
+    .pwm_low_limit = 1200, \
+    .pwm_high_limit = 1700, \
     .pwm_mock = 0, \
 }
 

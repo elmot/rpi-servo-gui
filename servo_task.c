@@ -68,16 +68,17 @@ void servo_core1_entry(void) {
         uint16_t raw_pwm = g_params.pwm_mock ? g_params.pwm_mock : pwm_count;
         if (raw_pwm == 0) continue;
 
-#define PWM_LOW_LIMIT  (1450)
-#define PWM_HIGH_LIMIT (1550)
+        uint16_t lo = g_params.pwm_low_limit;
+        uint16_t hi = g_params.pwm_high_limit;
+        if (hi <= lo) hi = lo + 1;
         uint16_t pwm = raw_pwm;
-        if (pwm < PWM_LOW_LIMIT) pwm = PWM_LOW_LIMIT;
-        else if (pwm > PWM_HIGH_LIMIT) pwm = PWM_HIGH_LIMIT;
+        if (pwm < lo) pwm = lo;
+        else if (pwm > hi) pwm = hi;
 
         int zra = g_params.zero_restricted_angle;
         int target_angle = zra +
-            ((pwm - PWM_LOW_LIMIT) * (360 - 2 * zra)) /
-            (PWM_HIGH_LIMIT - PWM_LOW_LIMIT);
+            ((pwm - lo) * (360 - 2 * zra)) /
+            (hi - lo);
 
         int angle = as560xReadAngle() * 360L / AS5601_ANGLE_MAX;
         if (g_params.angle_reversed) angle = 360 - angle;
@@ -131,8 +132,8 @@ void servo_core1_entry(void) {
                     motor_pwm = target_speed;
                     motor_state = MOTOR_RUNNING;
                 } else {
-                    int lo = g_params.cutoff_pwm;
-                    motor_pwm = lo + (target_speed - lo) * (int)elapsed / (int)duration;
+                    int base = g_params.cutoff_pwm;
+                    motor_pwm = base + (target_speed - base) * (int)elapsed / (int)duration;
                 }
                 if (motor_direction > 0) { pwm_a = motor_pwm; pwm_b = 0; }
                 else                     { pwm_a = 0; pwm_b = motor_pwm; }

@@ -31,7 +31,7 @@
     .bar-fill { height: 100%; border-radius: 3px; transition: width 0.1s; }
     .bar-row .val { width: 4em; font-family: monospace; }
     .bar-row input[type=range] { flex: 1; }
-    #angleWarning, #powerWarning { color: #c00; font-weight: bold; font-size: 0.9em; min-height: 1.2em; margin: 0.3em 0; }
+    #angleWarning, #powerWarning, #pwmRangeWarning { color: #c00; font-weight: bold; font-size: 0.9em; min-height: 1.2em; margin: 0.3em 0; }
     .check-row { margin: 0.4em 0; }
     .check-row label { font-size: 0.9em; }
     .check-row input[type=checkbox] { width: 2.3em; height: 2.3em; vertical-align: middle; }
@@ -97,6 +97,11 @@
     <div class="bar-row"><label>Slow start</label><div class="bar-bg"><div class="bar-fill" id="b_slow_start_ms" style="width:20%;background:#c6f"></div></div><span class="val" id="v_slow_start_ms">200</span>ms</div>
     <div class="slider-row"><label></label><input type="range" id="s_slow_start_ms" min="0" max="1000" step="10" value="200"></div>
 
+    <h3>PWM Input Range</h3>
+    <div class="slider-row"><label>Low limit</label><input type="range" id="s_pwm_low_limit" min="900" max="2500" step="10" value="1200"><span class="val" id="v_pwm_low_limit">1200</span>&micro;s</div>
+    <div class="slider-row"><label>High limit</label><input type="range" id="s_pwm_high_limit" min="900" max="2500" step="10" value="1700"><span class="val" id="v_pwm_high_limit">1700</span>&micro;s</div>
+    <div id="pwmRangeWarning"></div>
+
     <h3>Debug</h3>
     <div class="check-row"><label><input type="checkbox" id="s_pwm_mock_enabled"> Mock PWM input</label></div>
     <div class="slider-row"><label>Mock value</label><input type="range" id="s_pwm_mock" min="1000" max="2000" step="1" value="1500" disabled><span class="val" id="v_pwm_mock">1500</span>&micro;s</div>
@@ -115,14 +120,16 @@
   /* Editable param fields (sliders/checkbox) — order matches serialize output */
   const SLIDER_FIELDS = [
     'zero_restricted_angle','angle_tolerance','dead_angle','slow_angle',
-    'cutoff_pwm','slow_pwm','fast_pwm','slow_start_ms'
+    'cutoff_pwm','slow_pwm','fast_pwm','slow_start_ms',
+    'pwm_low_limit','pwm_high_limit'
   ];
   const ANGLE_FIELDS = ['zero_restricted_angle','angle_tolerance','dead_angle','slow_angle'];
 
   const DEFAULTS = {
     zero_restricted_angle: 5, angle_tolerance: 2, dead_angle: 5, slow_angle: 20,
     angle_reversed: 0,
-    cutoff_pwm: 50, slow_pwm: 70, fast_pwm: 100, slow_start_ms: 200
+    cutoff_pwm: 50, slow_pwm: 70, fast_pwm: 100, slow_start_ms: 200,
+    pwm_low_limit: 1200, pwm_high_limit: 1700
   };
 
   const MAX_LOG_LINES = 500;
@@ -191,6 +198,7 @@
     drawAngleCircle();
     checkAngleWarnings();
     checkPowerWarnings();
+    checkPwmRangeWarning();
   }
 
   function updateDisplay(field, val) {
@@ -264,6 +272,15 @@
     document.getElementById('powerWarning').textContent = w.join('; ');
   }
 
+  const PWM_RANGE_FIELDS = ['pwm_low_limit','pwm_high_limit'];
+
+  function checkPwmRangeWarning() {
+    const lo = parseInt(document.getElementById('s_pwm_low_limit').value);
+    const hi = parseInt(document.getElementById('s_pwm_high_limit').value);
+    document.getElementById('pwmRangeWarning').textContent =
+        (lo >= hi) ? 'low limit must be < high limit' : '';
+  }
+
   /* ---- Send params (throttled) ---- */
   function scheduleSend() {
     if (sendTimer || !device) return;
@@ -285,6 +302,7 @@
       updateDisplay(f, s.value);
       if (ANGLE_FIELDS.includes(f)) { drawAngleCircle(); checkAngleWarnings(); }
       if (POWER_FIELDS.includes(f)) { checkPowerWarnings(); }
+      if (PWM_RANGE_FIELDS.includes(f)) { checkPwmRangeWarning(); }
       scheduleSend();
     });
   }
