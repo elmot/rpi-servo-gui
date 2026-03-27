@@ -1,5 +1,5 @@
 <component name="DebugServers">
-  <generic-debug-target name="Generic" uniqueID="23c47d05-d32a-445f-b2eb-9dd92bec8e53" selected="true">
+  <generic-debug-target name="OpenOCD RPi 1" uniqueID="23c47d05-d32a-445f-b2eb-9dd92bec8e53" selected="true">
     <debugger version="1">
       <debugger kind="GDB" isBundled="true" />
       <env />
@@ -8,7 +8,7 @@
       <env />
     </gdbserver>
     <console enabled="true" port="4444" />
-    <target reset-before="false" />
+    <target reset-command="monitor reset init" reset-before="false" />
     <connection remote-string="tcp::3333" custom-script="echo Connecting to target...\n&#10;$GDBTargetCommand$&#10;echo Connected to target!\n" warmup-ms="500" />
   </generic-debug-target>
 </component>

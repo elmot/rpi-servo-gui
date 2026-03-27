@@ -12,6 +12,9 @@ add_executable(${CMAKE_PROJECT_NAME}
     usb_descriptors.c
     msc_disk.c
     index_htm_embed.S
+    servo_task.c
+    servo_pwm.c
+    as560x.c
 )
 
 # .incbin in the .S file resolves relative to the assembler's working dir;
@@ -27,6 +30,12 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
 
 target_link_libraries(${CMAKE_PROJECT_NAME}
     pico_stdlib
+    pico_multicore
+    hardware_pwm
+    hardware_i2c
+    hardware_timer
+    hardware_watchdog
+    hardware_clocks
     tinyusb_device
     tinyusb_board
 )

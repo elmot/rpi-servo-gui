@@ -1,8 +1,11 @@
 #include "bsp/board.h"
 #include "tusb.h"
 #include "pico/time.h"
+#include "pico/multicore.h"
 #include <stdio.h>
 #include <string.h>
+
+extern void servo_core1_entry(void);
 
 /* ---- Current parameters (read via EP0 vendor request) ---- */
 const char params[] = "version=0.1";
@@ -40,6 +43,7 @@ static void drain_param_writes(void) {
 int main(void) {
     board_init();
     tusb_init();
+    multicore_launch_core1(servo_core1_entry);
 
     while (true) {
         tud_task();
