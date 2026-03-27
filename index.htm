@@ -1,114 +1,128 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
   <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=yes">
+  <meta name="theme-color" content="#1e1e1e">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Smart Servo">
+  <meta name="description" content="Elmot Smart Servo — browser-based servo configuration via WebUSB">
   <title>Elmot Smart Servo</title>
+  <link rel="manifest" href="data:application/json,{&quot;name&quot;:&quot;Elmot Smart Servo&quot;,&quot;short_name&quot;:&quot;Servo&quot;,&quot;start_url&quot;:&quot;.&quot;,&quot;display&quot;:&quot;standalone&quot;,&quot;background_color&quot;:&quot;%23ffffff&quot;,&quot;theme_color&quot;:&quot;%231e1e1e&quot;,&quot;icons&quot;:[]}">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='45' fill='%23333'/><circle cx='50' cy='50' r='8' fill='%230f0'/><line x1='50' y1='50' x2='50' y2='15' stroke='%230f0' stroke-width='4'/></svg>">
   <style>
-    body { font-family: sans-serif; margin: 1em; margin-right: 31%; }
-    button { font-size: 1em; padding: 0.4em 1em; margin: 0.3em; }
-    #status { margin-top: 0.5em; color: #555; }
+    *, *::before, *::after { box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 1em; -webkit-tap-highlight-color: transparent; }
+
+    .header { display: flex; align-items: baseline; gap: 0.8em; margin-bottom: 0.3em; }
+    .header h1 { margin: 0; font-size: 1.3em; white-space: nowrap; }
+    #status { color: #555; font-size: 0.9em; }
+
+    /* ---- Buttons: flex wrap ---- */
+    .toolbar { display: flex; flex-wrap: wrap; gap: 0.3em; margin-bottom: 0.5em; }
+    button { font-size: 0.9em; padding: 0.5em 1em; border-radius: 6px; border: 1px solid #999; background: #f5f5f5; touch-action: manipulation; cursor: pointer; white-space: nowrap; }
+    button:active { background: #ddd; }
+    button:disabled { opacity: 0.4; }
+
+
+    /* ---- Main layout ---- */
+    .main { display: flex; gap: 1em; }
+    .params-col { flex: 1; min-width: 0; }
     #logBox {
-      position: fixed; top: 0; right: 0; bottom: 0;
-      width: 30%; overflow-y: auto;
+      width: 30%; min-width: 200px; max-height: calc(100vh - 6em); overflow-y: auto;
       background: #1e1e1e; color: #0f0;
-      font-family: monospace; font-size: 0.85em;
-      padding: 0.5em; margin: 0;
-      border-left: 2px solid #444;
-      white-space: pre;
+      font-family: monospace; font-size: 0.8em;
+      padding: 0.5em; border-radius: 6px;
+      white-space: pre; word-break: break-all;
     }
+    #logBox.collapsed { display: none; }
+
     .controls { opacity: 0.4; pointer-events: none; }
     .controls.active { opacity: 1; pointer-events: auto; }
-    .angle-section { display: flex; gap: 2em; margin: 1em 0; align-items: flex-start; }
-    .slider-group { flex: 1; }
-    .slider-row { display: flex; align-items: center; margin: 0.4em 0; gap: 0.5em; }
-    .slider-row label { width: 10em; text-align: right; font-size: 0.9em; }
-    .slider-row input[type=range] { flex: 1; }
-    .slider-row .val { width: 3em; text-align: right; font-family: monospace; }
-    h3 { margin: 1em 0 0.3em; }
-    .bar-row { display: flex; align-items: center; margin: 0.3em 0; gap: 0.5em; }
-    .bar-row label { width: 10em; text-align: right; font-size: 0.9em; }
-    .bar-bg { flex: 1; height: 20px; background: #ddd; border-radius: 3px; }
-    .bar-fill { height: 100%; border-radius: 3px; transition: width 0.1s; }
-    .bar-row .val { width: 4em; font-family: monospace; }
-    .bar-row input[type=range] { flex: 1; }
-    #angleWarning, #powerWarning, #pwmRangeWarning { color: #c00; font-weight: bold; font-size: 0.9em; min-height: 1.2em; margin: 0.3em 0; }
-    .check-row { margin: 0.4em 0; }
-    .check-row label { font-size: 0.9em; }
-    .check-row input[type=checkbox] { width: 2.3em; height: 2.3em; vertical-align: middle; }
-    #logToggle {
-      position: fixed; z-index: 10; background: #333; color: #0f0;
-      border: none; font-family: monospace; font-size: 0.8em;
-      padding: 0.2em 0.6em; cursor: pointer;
-    }
-    /* Landscape: top-right of log panel */
-    #logToggle { top: 0; right: 0; }
-    #logBox.collapsed { display: none; }
-    body.log-collapsed { margin-right: 1em; }
 
-    @media (orientation: portrait) {
-      body { margin-right: 1em; margin-bottom: 35vh; }
-      #logBox {
-        position: fixed; left: 0; right: 0; bottom: 0;
-        top: auto; width: auto; height: 30vh;
-        border-left: none; border-top: 2px solid #444;
-      }
+    /* ---- SVG + angle sliders side by side ---- */
+    .angle-section { display: flex; gap: 1em; align-items: flex-start; flex-wrap: wrap; }
+    .angle-section svg { flex-shrink: 0; }
+    .slider-group { flex: 1; min-width: 200px; }
+
+    /* ---- Slider rows ---- */
+    .slider-row { display: flex; align-items: center; margin: 0.3em 0; gap: 0.4em; }
+    .slider-row label { min-width: 7em; text-align: right; font-size: 0.85em; flex-shrink: 0; }
+    .slider-row input[type=range] { flex: 1; min-width: 80px; height: 1.8em; touch-action: manipulation; }
+    .slider-row .val { min-width: 2.5em; text-align: right; font-family: monospace; font-size: 0.85em; }
+    .slider-row .unit { font-size: 0.8em; color: #666; }
+
+    h3 { margin: 0.8em 0 0.2em; font-size: 1em; }
+
+    .warning { color: #c00; font-weight: bold; font-size: 0.85em; min-height: 1.1em; }
+
+    .check-row { margin: 0.3em 0; }
+    .check-row label { font-size: 0.9em; }
+    .check-row input[type=checkbox] { width: 2em; height: 2em; vertical-align: middle; }
+
+    #logToggle { font-size: 0.8em; padding: 0.3em 0.8em; }
+
+    /* ---- Portrait: stack vertically, log at bottom ---- */
+    @media (max-width: 700px) {
+      .header h1 { font-size: 1.1em; }
+      .main { flex-direction: column; }
+      #logBox { width: 100%; max-height: 15vh; font-size: 0.75em; }
       .angle-section { flex-direction: column; }
-      #logToggle { top: auto; bottom: 30vh; left: 0; right: auto; }
-      body.log-collapsed { margin-bottom: 1em; }
-      body.log-collapsed #logToggle { bottom: 0; }
+      .mock-row { display: flex; align-items: center; gap: 0.4em; flex-wrap: nowrap; }
+      .mock-row .check-row { margin: 0; }
+      .mock-row .slider-row { margin: 0; flex: 1; }
     }
   </style>
 </head>
 <body>
-  <h1>Elmot Smart Servo</h1>
-  <div>
+  <div class="header"><h1>Elmot Smart Servo</h1><span id="status">Not connected</span></div>
+  <div class="toolbar">
     <button id="btnConnect">Connect</button>
     <button id="btnDisconnect" disabled>Disconnect</button>
-    <button id="btnRestart" disabled>Restart Device</button>
+    <button id="btnRestart" disabled>Restart</button>
     <button id="btnSave" disabled>Save to Flash</button>
     <button id="btnReset" disabled>Reset Defaults</button>
+    <button id="logToggle">Log</button>
   </div>
-  <div id="status">Not connected</div>
 
-  <div id="controls" class="controls">
-    <div class="angle-section">
-      <svg id="angleCircle" width="260" height="260" viewBox="0 0 260 260"></svg>
-      <div class="slider-group">
-        <h3>Angle Parameters</h3>
-        <div class="slider-row"><label>Zero restricted</label><input type="range" id="s_zero_restricted_angle" min="0" max="90" value="5"><span class="val" id="v_zero_restricted_angle">5</span>&deg;</div>
-        <div class="slider-row"><label>Angle tolerance</label><input type="range" id="s_angle_tolerance" min="0" max="90" value="2"><span class="val" id="v_angle_tolerance">2</span>&deg;</div>
-        <div class="slider-row"><label>Dead angle</label><input type="range" id="s_dead_angle" min="0" max="90" value="5"><span class="val" id="v_dead_angle">5</span>&deg;</div>
-        <div class="slider-row"><label>Slow angle</label><input type="range" id="s_slow_angle" min="0" max="90" value="20"><span class="val" id="v_slow_angle">20</span>&deg;</div>
-        <div class="check-row"><label><input type="checkbox" id="s_angle_reversed"> Angle reversed</label></div>
-        <div id="angleWarning"></div>
+  <div class="main">
+    <div class="params-col">
+      <div id="controls" class="controls">
+        <div class="angle-section">
+          <svg id="angleCircle" width="220" height="220" viewBox="0 0 260 260"></svg>
+          <div class="slider-group">
+            <h3 style="display:flex;align-items:center;gap:1em">Angle <label class="check-row" style="font-weight:normal;font-size:0.85em"><input type="checkbox" id="s_angle_reversed"> Reversed</label></h3>
+            <div class="slider-row"><label>Zero restricted</label><input type="range" id="s_zero_restricted_angle" min="0" max="90" value="5"><span class="val" id="v_zero_restricted_angle">5</span><span class="unit">&deg;</span></div>
+            <div class="slider-row"><label>Tolerance</label><input type="range" id="s_angle_tolerance" min="0" max="90" value="2"><span class="val" id="v_angle_tolerance">2</span><span class="unit">&deg;</span></div>
+            <div class="slider-row"><label>Dead angle</label><input type="range" id="s_dead_angle" min="0" max="90" value="5"><span class="val" id="v_dead_angle">5</span><span class="unit">&deg;</span></div>
+            <div class="slider-row"><label>Slow angle</label><input type="range" id="s_slow_angle" min="0" max="90" value="20"><span class="val" id="v_slow_angle">20</span><span class="unit">&deg;</span></div>
+            <div class="warning" id="angleWarning"></div>
+          </div>
+        </div>
+
+        <h3>Power</h3>
+        <div class="slider-row"><label>Minimum</label><input type="range" id="s_cutoff_pwm" min="0" max="100" value="50"><span class="val" id="v_cutoff_pwm">50</span><span class="unit">%</span></div>
+        <div class="slider-row"><label>Slow</label><input type="range" id="s_slow_pwm" min="0" max="100" value="70"><span class="val" id="v_slow_pwm">70</span><span class="unit">%</span></div>
+        <div class="slider-row"><label>Full</label><input type="range" id="s_fast_pwm" min="0" max="100" value="100"><span class="val" id="v_fast_pwm">100</span><span class="unit">%</span></div>
+        <div class="warning" id="powerWarning"></div>
+
+        <h3>Timing</h3>
+        <div class="slider-row"><label>Slow start</label><input type="range" id="s_slow_start_ms" min="0" max="1000" step="10" value="200"><span class="val" id="v_slow_start_ms">200</span><span class="unit">ms</span></div>
+
+        <h3>PWM Input</h3>
+        <div class="slider-row"><label>Low limit</label><input type="range" id="s_pwm_low_limit" min="900" max="2500" step="10" value="1200"><span class="val" id="v_pwm_low_limit">1200</span><span class="unit">&micro;s</span></div>
+        <div class="slider-row"><label>High limit</label><input type="range" id="s_pwm_high_limit" min="900" max="2500" step="10" value="1700"><span class="val" id="v_pwm_high_limit">1700</span><span class="unit">&micro;s</span></div>
+        <div class="warning" id="pwmRangeWarning"></div>
+
+        <div class="mock-row">
+          <div class="check-row"><label><input type="checkbox" id="s_pwm_mock_enabled"> Mock PWM</label></div>
+          <div class="slider-row"><label>Value</label><input type="range" id="s_pwm_mock" min="1000" max="2000" step="1" value="1500" disabled><span class="val" id="v_pwm_mock">1500</span><span class="unit">&micro;s</span></div>
+        </div>
       </div>
     </div>
-
-    <h3>Power</h3>
-    <div class="bar-row"><label>Minimum</label><div class="bar-bg"><div class="bar-fill" id="b_cutoff_pwm" style="width:50%;background:#888"></div></div><span class="val" id="v_cutoff_pwm">50</span>%</div>
-    <div class="slider-row"><label></label><input type="range" id="s_cutoff_pwm" min="0" max="100" value="50"></div>
-    <div class="bar-row"><label>Slow</label><div class="bar-bg"><div class="bar-fill" id="b_slow_pwm" style="width:70%;background:#09f"></div></div><span class="val" id="v_slow_pwm">70</span>%</div>
-    <div class="slider-row"><label></label><input type="range" id="s_slow_pwm" min="0" max="100" value="70"></div>
-    <div class="bar-row"><label>Full</label><div class="bar-bg"><div class="bar-fill" id="b_fast_pwm" style="width:100%;background:#0c0"></div></div><span class="val" id="v_fast_pwm">100</span>%</div>
-    <div class="slider-row"><label></label><input type="range" id="s_fast_pwm" min="0" max="100" value="100"></div>
-    <div id="powerWarning"></div>
-
-    <h3>Timing</h3>
-    <div class="bar-row"><label>Slow start</label><div class="bar-bg"><div class="bar-fill" id="b_slow_start_ms" style="width:20%;background:#c6f"></div></div><span class="val" id="v_slow_start_ms">200</span>ms</div>
-    <div class="slider-row"><label></label><input type="range" id="s_slow_start_ms" min="0" max="1000" step="10" value="200"></div>
-
-    <h3>PWM Input Range</h3>
-    <div class="slider-row"><label>Low limit</label><input type="range" id="s_pwm_low_limit" min="900" max="2500" step="10" value="1200"><span class="val" id="v_pwm_low_limit">1200</span>&micro;s</div>
-    <div class="slider-row"><label>High limit</label><input type="range" id="s_pwm_high_limit" min="900" max="2500" step="10" value="1700"><span class="val" id="v_pwm_high_limit">1700</span>&micro;s</div>
-    <div id="pwmRangeWarning"></div>
-
-    <h3>Debug</h3>
-    <div class="check-row"><label><input type="checkbox" id="s_pwm_mock_enabled"> Mock PWM input</label></div>
-    <div class="slider-row"><label>Mock value</label><input type="range" id="s_pwm_mock" min="1000" max="2000" step="1" value="1500" disabled><span class="val" id="v_pwm_mock">1500</span>&micro;s</div>
+    <div id="logBox"></div>
   </div>
-
-  <button id="logToggle">Log</button>
-  <div id="logBox"></div>
 
 <script>
   const VID = 0xCAFE, PID = 0x4002;
@@ -117,13 +131,14 @@
   const VENDOR_REQUEST_SAVE   = 0x05;
   const INTERFACE = 0, EP_IN = 0x01, EP_OUT = 0x01;
 
-  /* Editable param fields (sliders/checkbox) — order matches serialize output */
   const SLIDER_FIELDS = [
     'zero_restricted_angle','angle_tolerance','dead_angle','slow_angle',
     'cutoff_pwm','slow_pwm','fast_pwm','slow_start_ms',
     'pwm_low_limit','pwm_high_limit'
   ];
   const ANGLE_FIELDS = ['zero_restricted_angle','angle_tolerance','dead_angle','slow_angle'];
+  const POWER_FIELDS = ['cutoff_pwm','slow_pwm','fast_pwm'];
+  const PWM_RANGE_FIELDS = ['pwm_low_limit','pwm_high_limit'];
 
   const DEFAULTS = {
     zero_restricted_angle: 5, angle_tolerance: 2, dead_angle: 5, slow_angle: 20,
@@ -156,9 +171,7 @@
     for (const line of text.split('\n')) {
       const eq = line.indexOf('=');
       if (eq < 0) continue;
-      const key = line.substring(0, eq).trim();
-      const val = line.substring(eq + 1).trim();
-      p[key] = val;
+      p[line.substring(0, eq).trim()] = line.substring(eq + 1).trim();
     }
     return p;
   }
@@ -183,9 +196,8 @@
       if (s) s.value = parseInt(p[f]);
       updateDisplay(f, parseInt(p[f]));
     }
-    if (p.angle_reversed !== undefined) {
+    if (p.angle_reversed !== undefined)
       document.getElementById('s_angle_reversed').checked = (parseInt(p.angle_reversed) !== 0);
-    }
     if (p.pwm_mock !== undefined) {
       const val = parseInt(p.pwm_mock);
       document.getElementById('s_pwm_mock_enabled').checked = (val !== 0);
@@ -204,11 +216,6 @@
   function updateDisplay(field, val) {
     const v = document.getElementById('v_' + field);
     if (v) v.textContent = val;
-    const b = document.getElementById('b_' + field);
-    if (b) {
-      const max = field === 'slow_start_ms' ? 1000 : 100;
-      b.style.width = (val / max * 100) + '%';
-    }
   }
 
   /* ---- SVG Circle ---- */
@@ -260,8 +267,6 @@
     document.getElementById('angleWarning').textContent = w.join('; ');
   }
 
-  const POWER_FIELDS = ['cutoff_pwm','slow_pwm','fast_pwm'];
-
   function checkPowerWarnings() {
     const cutoff = parseInt(document.getElementById('s_cutoff_pwm').value);
     const slow = parseInt(document.getElementById('s_slow_pwm').value);
@@ -271,8 +276,6 @@
     if (slow >= fast) w.push('slow must be < fast');
     document.getElementById('powerWarning').textContent = w.join('; ');
   }
-
-  const PWM_RANGE_FIELDS = ['pwm_low_limit','pwm_high_limit'];
 
   function checkPwmRangeWarning() {
     const lo = parseInt(document.getElementById('s_pwm_low_limit').value);
@@ -288,8 +291,7 @@
       sendTimer = null;
       if (!device) return;
       try {
-        const text = buildParamsText();
-        await device.transferOut(EP_OUT, new TextEncoder().encode(text));
+        await device.transferOut(EP_OUT, new TextEncoder().encode(buildParamsText()));
       } catch (e) { console.error('Send error:', e); }
     }, 50);
   }
@@ -333,8 +335,7 @@
         requestType: 'vendor', recipient: 'device',
         request: VENDOR_REQUEST_PARAMS, value: 0, index: 0
       }, 512);
-      const text = new TextDecoder().decode(result.data);
-      populateFromMap(parseParamsText(text));
+      populateFromMap(parseParamsText(new TextDecoder().decode(result.data)));
 
       readLogLoop();
     } catch (e) {
@@ -398,7 +399,6 @@
   /* ---- Log ---- */
   document.getElementById('logToggle').addEventListener('click', () => {
     logBox.classList.toggle('collapsed');
-    document.body.classList.toggle('log-collapsed');
   });
 
   function appendLog(text) {

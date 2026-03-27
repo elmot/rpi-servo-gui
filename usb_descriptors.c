@@ -26,7 +26,7 @@
 #define VENDOR_REQUEST_SAVE     0x05  /* bRequest to save params to flash */
 
 /* ---- WebUSB landing page URL (https:// prefix implied by bScheme=1) ---- */
-#define URL "localhost:8000/usb" //todo set normal URL
+#define URL "smart-servo.elmot.xyz/" SERVO_VERSION "/index.htm"
 
 /* ---- BOS descriptor sizes ---- */
 #define BOS_TOTAL_LEN (TUD_BOS_DESC_LEN + TUD_BOS_WEBUSB_DESC_LEN + TUD_BOS_MICROSOFT_OS_DESC_LEN)
