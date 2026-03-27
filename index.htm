@@ -4,17 +4,9 @@
   <meta charset="utf-8">
   <title>Elmot Smart Servo</title>
   <style>
-    body { font-family: sans-serif; margin: 2em; margin-right: 31%; margin-bottom: 8em; }
+    body { font-family: sans-serif; margin: 1em; margin-right: 31%; }
     button { font-size: 1em; padding: 0.4em 1em; margin: 0.3em; }
-    #status { margin-top: 1em; color: #555; }
-    #params {
-      position: fixed; bottom: 0; left: 0; right: 30%;
-      min-height: 4.8em;
-      font-family: monospace; white-space: pre;
-      background: #f0f0f0; padding: 0.5em;
-      border-top: 2px solid #ccc;
-      overflow-y: auto;
-    }
+    #status { margin-top: 0.5em; color: #555; }
     #logBox {
       position: fixed; top: 0; right: 0; bottom: 0;
       width: 30%; overflow-y: auto;
@@ -24,82 +16,249 @@
       border-left: 2px solid #444;
       white-space: pre;
     }
+    .controls { opacity: 0.4; pointer-events: none; }
+    .controls.active { opacity: 1; pointer-events: auto; }
+    .angle-section { display: flex; gap: 2em; margin: 1em 0; align-items: flex-start; }
+    .slider-group { flex: 1; }
+    .slider-row { display: flex; align-items: center; margin: 0.4em 0; gap: 0.5em; }
+    .slider-row label { width: 10em; text-align: right; font-size: 0.9em; }
+    .slider-row input[type=range] { flex: 1; }
+    .slider-row .val { width: 3em; text-align: right; font-family: monospace; }
+    h3 { margin: 1em 0 0.3em; }
+    .bar-row { display: flex; align-items: center; margin: 0.3em 0; gap: 0.5em; }
+    .bar-row label { width: 10em; text-align: right; font-size: 0.9em; }
+    .bar-bg { flex: 1; height: 20px; background: #ddd; border-radius: 3px; }
+    .bar-fill { height: 100%; border-radius: 3px; transition: width 0.1s; }
+    .bar-row .val { width: 4em; font-family: monospace; }
+    .bar-row input[type=range] { flex: 1; }
+    #angleWarning { color: #c00; font-weight: bold; font-size: 0.9em; min-height: 1.2em; margin: 0.3em 0; }
+    .check-row { margin: 0.4em 0; }
+    .check-row label { font-size: 0.9em; }
+    .check-row input[type=checkbox] { width: 2.3em; height: 2.3em; vertical-align: middle; }
+    #versionInfo { font-family: monospace; color: #888; margin: 0.5em 0; }
   </style>
 </head>
 <body>
   <h1>Elmot Smart Servo</h1>
-  <button id="btnConnect">Connect</button>
-  <button id="btnDisconnect" disabled>Disconnect</button>
-  <button id="btnRestart" disabled>Restart Device</button>
+  <div>
+    <button id="btnConnect">Connect</button>
+    <button id="btnDisconnect" disabled>Disconnect</button>
+    <button id="btnRestart" disabled>Restart Device</button>
+    <button id="btnSave" disabled>Save to Flash</button>
+    <button id="btnReset" disabled>Reset Defaults</button>
+  </div>
   <div id="status">Not connected</div>
-  <div id="params"></div>
+  <div id="versionInfo"></div>
+
+  <div id="controls" class="controls">
+    <div class="angle-section">
+      <svg id="angleCircle" width="260" height="260" viewBox="0 0 260 260"></svg>
+      <div class="slider-group">
+        <h3>Angle Parameters</h3>
+        <div class="slider-row"><label>Zero restricted</label><input type="range" id="s_zero_restricted_angle" min="0" max="90" value="5"><span class="val" id="v_zero_restricted_angle">5</span>&deg;</div>
+        <div class="slider-row"><label>Angle tolerance</label><input type="range" id="s_angle_tolerance" min="0" max="90" value="2"><span class="val" id="v_angle_tolerance">2</span>&deg;</div>
+        <div class="slider-row"><label>Dead angle</label><input type="range" id="s_dead_angle" min="0" max="90" value="5"><span class="val" id="v_dead_angle">5</span>&deg;</div>
+        <div class="slider-row"><label>Slow angle</label><input type="range" id="s_slow_angle" min="0" max="90" value="20"><span class="val" id="v_slow_angle">20</span>&deg;</div>
+        <div class="check-row"><label><input type="checkbox" id="s_angle_reversed"> Angle reversed</label></div>
+        <div id="angleWarning"></div>
+      </div>
+    </div>
+
+    <h3>Power</h3>
+    <div class="bar-row"><label>Minimum</label><div class="bar-bg"><div class="bar-fill" id="b_no_pwm" style="width:30%;background:#888"></div></div><span class="val" id="v_no_pwm">30</span>%</div>
+    <div class="slider-row"><label></label><input type="range" id="s_no_pwm" min="0" max="100" value="30"></div>
+    <div class="bar-row"><label>Slow start</label><div class="bar-bg"><div class="bar-fill" id="b_slow_start_pwm" style="width:30%;background:#f90"></div></div><span class="val" id="v_slow_start_pwm">30</span>%</div>
+    <div class="slider-row"><label></label><input type="range" id="s_slow_start_pwm" min="0" max="100" value="30"></div>
+    <div class="bar-row"><label>Slow</label><div class="bar-bg"><div class="bar-fill" id="b_slow_pwm" style="width:10%;background:#09f"></div></div><span class="val" id="v_slow_pwm">10</span>%</div>
+    <div class="slider-row"><label></label><input type="range" id="s_slow_pwm" min="0" max="100" value="10"></div>
+    <div class="bar-row"><label>Full</label><div class="bar-bg"><div class="bar-fill" id="b_fast_pwm" style="width:100%;background:#0c0"></div></div><span class="val" id="v_fast_pwm">100</span>%</div>
+    <div class="slider-row"><label></label><input type="range" id="s_fast_pwm" min="0" max="100" value="100"></div>
+
+    <h3>Timing</h3>
+    <div class="bar-row"><label>Slow start</label><div class="bar-bg"><div class="bar-fill" id="b_slow_start_ms" style="width:20%;background:#c6f"></div></div><span class="val" id="v_slow_start_ms">200</span>ms</div>
+    <div class="slider-row"><label></label><input type="range" id="s_slow_start_ms" min="0" max="1000" step="10" value="200"></div>
+  </div>
+
   <div id="logBox"></div>
 
 <script>
-  const VID = 0xCAFE;
-  const PID = 0x4002;
+  const VID = 0xCAFE, PID = 0x4002;
   const VENDOR_REQUEST_PARAMS = 0x03;
   const VENDOR_REQUEST_REBOOT = 0x04;
-  const INTERFACE = 0;
-  const EP_IN = 0x01;
+  const VENDOR_REQUEST_SAVE   = 0x05;
+  const INTERFACE = 0, EP_IN = 0x01, EP_OUT = 0x01;
+
+  /* Editable param fields (sliders/checkbox) — order matches serialize output */
+  const SLIDER_FIELDS = [
+    'zero_restricted_angle','angle_tolerance','dead_angle','slow_angle',
+    'no_pwm','slow_start_pwm','slow_pwm','fast_pwm','slow_start_ms'
+  ];
+  const ANGLE_FIELDS = ['zero_restricted_angle','angle_tolerance','dead_angle','slow_angle'];
+
+  const DEFAULTS = {
+    zero_restricted_angle: 5, angle_tolerance: 2, dead_angle: 5, slow_angle: 20,
+    angle_reversed: 0,
+    no_pwm: 30, slow_start_pwm: 30, slow_pwm: 10, fast_pwm: 100, slow_start_ms: 200
+  };
 
   const MAX_LOG_LINES = 500;
-  let device = null;
-  let logLines = [];
+  let device = null, logLines = [], sendTimer = null;
 
-  const status = document.getElementById('status');
-  const paramsDiv = document.getElementById('params');
+  const statusEl = document.getElementById('status');
   const logBox = document.getElementById('logBox');
-  const btnConnect = document.getElementById('btnConnect');
-  const btnDisconnect = document.getElementById('btnDisconnect');
-  const btnRestart = document.getElementById('btnRestart');
+  const controlsEl = document.getElementById('controls');
+  const versionEl = document.getElementById('versionInfo');
 
-  function setStatus(msg) { status.textContent = msg; }
+  function setStatus(msg) { statusEl.textContent = msg; }
 
   function setConnected(on) {
-    btnConnect.disabled = on;
-    btnDisconnect.disabled = !on;
-    btnRestart.disabled = !on;
+    document.getElementById('btnConnect').disabled = on;
+    document.getElementById('btnDisconnect').disabled = !on;
+    document.getElementById('btnRestart').disabled = !on;
+    document.getElementById('btnSave').disabled = !on;
+    document.getElementById('btnReset').disabled = !on;
+    controlsEl.classList.toggle('active', on);
+    if (!on) versionEl.textContent = '';
   }
 
-  async function readParams() {
-    const result = await device.controlTransferIn({
-      requestType: 'vendor',
-      recipient: 'device',
-      request: VENDOR_REQUEST_PARAMS,
-      value: 0,
-      index: 0
-    }, 256);
-    return new TextDecoder().decode(result.data);
-  }
-
-  async function disconnect() {
-    const dev = device;
-    device = null;
-    setConnected(false);
-    paramsDiv.textContent = '';
-    if (dev) {
-      try { await dev.close(); } catch (e) { /* ignore */ }
+  /* ---- Text key=value protocol ---- */
+  function parseParamsText(text) {
+    const p = {};
+    for (const line of text.split('\n')) {
+      const eq = line.indexOf('=');
+      if (eq < 0) continue;
+      const key = line.substring(0, eq).trim();
+      const val = line.substring(eq + 1).trim();
+      p[key] = val;
     }
-    appendLog('--- Disconnected ---');
-    setStatus('Disconnected');
+    return p;
   }
 
-  btnConnect.addEventListener('click', async () => {
+  function buildParamsText() {
+    let lines = [];
+    for (const f of SLIDER_FIELDS) {
+      lines.push(f + '=' + document.getElementById('s_' + f).value);
+    }
+    lines.push('angle_reversed=' + (document.getElementById('s_angle_reversed').checked ? '1' : '0'));
+    return lines.join('\n') + '\n';
+  }
+
+  function populateFromMap(p) {
+    if (p.version) versionEl.textContent = 'Firmware version: ' + p.version;
+    for (const f of SLIDER_FIELDS) {
+      if (p[f] === undefined) continue;
+      const s = document.getElementById('s_' + f);
+      if (s) s.value = parseInt(p[f]);
+      updateDisplay(f, parseInt(p[f]));
+    }
+    if (p.angle_reversed !== undefined) {
+      document.getElementById('s_angle_reversed').checked = (parseInt(p.angle_reversed) !== 0);
+    }
+    drawAngleCircle();
+    checkAngleWarnings();
+  }
+
+  function updateDisplay(field, val) {
+    const v = document.getElementById('v_' + field);
+    if (v) v.textContent = val;
+    const b = document.getElementById('b_' + field);
+    if (b) {
+      const max = field === 'slow_start_ms' ? 1000 : 100;
+      b.style.width = (val / max * 100) + '%';
+    }
+  }
+
+  /* ---- SVG Circle ---- */
+  function polarToXY(cx, cy, r, deg) {
+    const rad = (deg - 90) * Math.PI / 180;
+    return [cx + r * Math.cos(rad), cy + r * Math.sin(rad)];
+  }
+
+  function arcPath(cx, cy, r, startDeg, endDeg) {
+    const [x1, y1] = polarToXY(cx, cy, r, startDeg);
+    const [x2, y2] = polarToXY(cx, cy, r, endDeg);
+    const large = (endDeg - startDeg > 180) ? 1 : 0;
+    return `M ${x1} ${y1} A ${r} ${r} 0 ${large} 1 ${x2} ${y2}`;
+  }
+
+  function drawAngleCircle() {
+    const svg = document.getElementById('angleCircle');
+    const cx = 130, cy = 130, r = 110;
+    const zra = parseInt(document.getElementById('s_zero_restricted_angle').value);
+    const tol = parseInt(document.getElementById('s_angle_tolerance').value);
+    const dead = parseInt(document.getElementById('s_dead_angle').value);
+    const slow = parseInt(document.getElementById('s_slow_angle').value);
+    const target = 180;
+
+    let html = `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="#ccc" stroke-width="1"/>`;
+    if (zra > 0) {
+      html += `<path d="${arcPath(cx, cy, r, 360 - zra, 360)}" fill="none" stroke="red" stroke-width="8" opacity="0.5"/>`;
+      html += `<path d="${arcPath(cx, cy, r, 0, zra)}" fill="none" stroke="red" stroke-width="8" opacity="0.5"/>`;
+    }
+    html += `<path d="${arcPath(cx, cy, r - 2, target - slow, target + slow)}" fill="none" stroke="#09f" stroke-width="12" opacity="0.25"/>`;
+    html += `<path d="${arcPath(cx, cy, r - 2, target - dead, target + dead)}" fill="none" stroke="#fa0" stroke-width="12" opacity="0.4"/>`;
+    html += `<path d="${arcPath(cx, cy, r - 2, target - tol, target + tol)}" fill="none" stroke="#0a0" stroke-width="12" opacity="0.5"/>`;
+    const [tx, ty] = polarToXY(cx, cy, r - 20, target);
+    html += `<line x1="${cx}" y1="${cy}" x2="${tx}" y2="${ty}" stroke="#333" stroke-width="2"/>`;
+    html += `<circle cx="${cx}" cy="${cy}" r="3" fill="#333"/>`;
+    html += `<text x="${cx}" y="18" text-anchor="middle" font-size="10" fill="red">restricted</text>`;
+    const [st, sty] = polarToXY(cx, cy, r + 14, target);
+    html += `<text x="${st}" y="${sty + 4}" text-anchor="middle" font-size="10" fill="#333">target</text>`;
+    svg.innerHTML = html;
+  }
+
+  function checkAngleWarnings() {
+    const tol = parseInt(document.getElementById('s_angle_tolerance').value);
+    const dead = parseInt(document.getElementById('s_dead_angle').value);
+    const slow = parseInt(document.getElementById('s_slow_angle').value);
+    const w = [];
+    if (tol >= dead) w.push('tolerance must be < dead angle');
+    if (dead >= slow) w.push('dead angle must be < slow angle');
+    document.getElementById('angleWarning').textContent = w.join('; ');
+  }
+
+  /* ---- Send params (throttled) ---- */
+  function scheduleSend() {
+    if (sendTimer || !device) return;
+    sendTimer = setTimeout(async () => {
+      sendTimer = null;
+      if (!device) return;
+      try {
+        const text = buildParamsText();
+        await device.transferOut(EP_OUT, new TextEncoder().encode(text));
+      } catch (e) { console.error('Send error:', e); }
+    }, 50);
+  }
+
+  /* ---- Slider/checkbox event wiring ---- */
+  for (const f of SLIDER_FIELDS) {
+    const s = document.getElementById('s_' + f);
+    if (!s) continue;
+    s.addEventListener('input', () => {
+      updateDisplay(f, s.value);
+      if (ANGLE_FIELDS.includes(f)) { drawAngleCircle(); checkAngleWarnings(); }
+      scheduleSend();
+    });
+  }
+  document.getElementById('s_angle_reversed').addEventListener('change', () => scheduleSend());
+
+  /* ---- Connection ---- */
+  document.getElementById('btnConnect').addEventListener('click', async () => {
     try {
-      device = await navigator.usb.requestDevice({
-        filters: [{ vendorId: VID, productId: PID }]
-      });
+      device = await navigator.usb.requestDevice({ filters: [{ vendorId: VID, productId: PID }] });
       await device.open();
-      if (device.configuration === null) {
-        await device.selectConfiguration(1);
-      }
+      if (device.configuration === null) await device.selectConfiguration(1);
       await device.claimInterface(INTERFACE);
       setStatus('Connected: ' + device.productName);
       setConnected(true);
       appendLog('--- Connected: ' + device.productName + ' ---');
 
-      paramsDiv.textContent = await readParams();
+      const result = await device.controlTransferIn({
+        requestType: 'vendor', recipient: 'device',
+        request: VENDOR_REQUEST_PARAMS, value: 0, index: 0
+      }, 512);
+      const text = new TextDecoder().decode(result.data);
+      populateFromMap(parseParamsText(text));
 
       readLogLoop();
     } catch (e) {
@@ -108,41 +267,62 @@
     }
   });
 
-  btnDisconnect.addEventListener('click', () => disconnect());
+  async function disconnect() {
+    const dev = device;
+    device = null;
+    setConnected(false);
+    if (dev) { try { await dev.close(); } catch (e) { /* ignore */ } }
+    appendLog('--- Disconnected ---');
+    setStatus('Disconnected');
+  }
 
-  btnRestart.addEventListener('click', async () => {
+  document.getElementById('btnDisconnect').addEventListener('click', () => disconnect());
+
+  document.getElementById('btnRestart').addEventListener('click', async () => {
     if (!device) return;
     try {
       await device.controlTransferOut({
-        requestType: 'vendor',
-        recipient: 'device',
-        request: VENDOR_REQUEST_REBOOT,
-        value: 0,
-        index: 0
+        requestType: 'vendor', recipient: 'device',
+        request: VENDOR_REQUEST_REBOOT, value: 0, index: 0
       });
-    } catch (e) { /* device reboots, connection drops */ }
+    } catch (e) { /* device reboots */ }
     device = null;
     setConnected(false);
-    paramsDiv.textContent = '';
     appendLog('--- Restart requested ---');
     setStatus('Device restarting...');
+  });
+
+  document.getElementById('btnSave').addEventListener('click', async () => {
+    if (!device) return;
+    try {
+      await device.controlTransferOut({
+        requestType: 'vendor', recipient: 'device',
+        request: VENDOR_REQUEST_SAVE, value: 0, index: 0
+      });
+      appendLog('--- Params saved to flash ---');
+    } catch (e) {
+      appendLog('--- Save failed: ' + e.message + ' ---');
+    }
+  });
+
+  document.getElementById('btnReset').addEventListener('click', () => {
+    populateFromMap(DEFAULTS);
+    scheduleSend();
   });
 
   navigator.usb.addEventListener('disconnect', (e) => {
     if (device && e.device === device) {
       device = null;
       setConnected(false);
-      paramsDiv.textContent = '';
       appendLog('--- Device unplugged ---');
       setStatus('Device unplugged');
     }
   });
 
+  /* ---- Log ---- */
   function appendLog(text) {
     logLines.push(text);
-    if (logLines.length > MAX_LOG_LINES) {
-      logLines.shift();
-    }
+    if (logLines.length > MAX_LOG_LINES) logLines.shift();
     logBox.textContent = logLines.join('\n');
     logBox.scrollTop = logBox.scrollHeight;
   }
@@ -154,7 +334,6 @@
         appendLog(new TextDecoder().decode(result.data).trimEnd());
       } catch (e) {
         if (device) {
-          console.error('Log error:', e);
           appendLog('--- Connection lost ---');
           await disconnect();
         }
@@ -162,6 +341,8 @@
       }
     }
   }
+
+  drawAngleCircle();
 </script>
 </body>
 </html>

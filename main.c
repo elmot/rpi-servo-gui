@@ -1,7 +1,7 @@
 #include "bsp/board.h"
 #include "tusb.h"
-#include "pico/time.h"
 #include "pico/multicore.h"
+#include "params.h"
 #include "servo_errors.h"
 #include <stdio.h>
 #include <string.h>
@@ -15,9 +15,6 @@ void schedule_reboot(void)
 {
     watchdog_reboot(0,0,1);
 }
-
-/* ---- Current parameters (read via EP0 vendor request) ---- */
-const char params[] = "version=0.1";
 
 /* ---- Log (streamed on bulk IN) ---- */
 static uint32_t log_seq = 0;
@@ -60,19 +57,28 @@ static void log_task(void)
     }
 }
 
-static void drain_param_writes(void)
+static void process_param_writes(void)
 {
     if (!tud_vendor_available()) return;
-    uint8_t discard[64];
-    while (tud_vendor_available())
-    {
-        tud_vendor_read(discard, sizeof(discard));
+
+    char buf[256];
+    uint32_t total = 0;
+    while (tud_vendor_available() && total < sizeof(buf) - 1) {
+        total += tud_vendor_read(buf + total, sizeof(buf) - 1 - total);
+    }
+    /* Drain overflow */
+    { uint8_t discard[64]; while (tud_vendor_available()) tud_vendor_read(discard, sizeof(discard)); }
+
+    if (total > 0) {
+        buf[total] = '\0';
+        params_deserialize(buf, (int)total);
     }
 }
 
 int main(void)
 {
     board_init();
+    params_load_from_flash();
     tusb_init();
     multicore_launch_core1(servo_core1_entry);
 
@@ -81,6 +87,6 @@ int main(void)
     {
         tud_task();
         log_task();
-        drain_param_writes();
+        process_param_writes();
     }
 }

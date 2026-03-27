@@ -12,6 +12,7 @@ add_executable(${CMAKE_PROJECT_NAME}
     usb_descriptors.c
     msc_disk.c
     index_htm_embed.S
+    params.c
     servo_task.c
     servo_pwm.c
     as560x.c
@@ -36,6 +37,8 @@ target_link_libraries(${CMAKE_PROJECT_NAME}
     hardware_timer
     hardware_watchdog
     hardware_clocks
+    hardware_flash
+    pico_flash
     tinyusb_device
     tinyusb_board
 )

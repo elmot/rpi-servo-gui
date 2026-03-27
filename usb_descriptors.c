@@ -21,8 +21,9 @@
 /* ---- Vendor request codes (used in BOS capabilities and control xfer handler) ---- */
 #define VENDOR_REQUEST_WEBUSB    0x01  /* bRequest for WebUSB GET_URL */
 #define VENDOR_REQUEST_MICROSOFT 0x02  /* bRequest for MS OS 2.0 descriptor set */
-#define VENDOR_REQUEST_PARAMS    0x03  /* bRequest for reading device parameters */
+#define VENDOR_REQUEST_PARAMS    0x03  /* bRequest for reading device parameters (binary struct) */
 #define VENDOR_REQUEST_REBOOT   0x04  /* bRequest to reboot the device */
+#define VENDOR_REQUEST_SAVE     0x05  /* bRequest to save params to flash */
 
 /* ---- WebUSB landing page URL (https:// prefix implied by bScheme=1) ---- */
 #define URL "localhost:8000/usb" //todo set normal URL
@@ -188,8 +189,7 @@ static const tusb_desc_webusb_url_t desc_url = {
  *   0x03 (VENDOR_REQUEST_PARAMS)    → return device parameters string
  * ========================================================================== */
 
-/* Defined in main.c */
-extern const char params[];
+#include "params.h"
 
 bool tud_vendor_control_xfer_cb(uint8_t rhport, uint8_t stage, const tusb_control_request_t *request) {
     if (stage != CONTROL_STAGE_SETUP) {
@@ -212,14 +212,22 @@ bool tud_vendor_control_xfer_cb(uint8_t rhport, uint8_t stage, const tusb_contro
             }
             return false;
 
-        case VENDOR_REQUEST_PARAMS:
-            return tud_control_xfer(rhport, request, (void *)(uintptr_t)params, (uint16_t)strlen(params));
+        case VENDOR_REQUEST_PARAMS: {
+            static char pbuf[256];
+            int plen = params_serialize(pbuf, sizeof(pbuf));
+            return tud_control_xfer(rhport, request, (void *)pbuf, (uint16_t)plen);
+        }
 
         case VENDOR_REQUEST_REBOOT: {
-            /* ACK the control transfer first, then schedule reboot */
             tud_control_status(rhport, request);
             extern void schedule_reboot(void);
             schedule_reboot();
+            return true;
+        }
+
+        case VENDOR_REQUEST_SAVE: {
+            tud_control_status(rhport, request);
+            params_save_to_flash();
             return true;
         }
 

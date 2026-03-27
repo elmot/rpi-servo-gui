@@ -1,31 +1,51 @@
-//
-// Created by elmot on 23 Apr 2023.
-//
+#ifndef RPI_SERVO_GUI_PARAMS_H
+#define RPI_SERVO_GUI_PARAMS_H
 
-#ifndef RPI_PICO_SERVO_PARAMS_H
-#define RPI_PICO_SERVO_PARAMS_H
-//degrees
-// Dead angle around zero position
-#define ZERO_RESTRICTED_ANGLE  (5)
+#include <stdint.h>
+#include <stdbool.h>
 
-//Stop moving when the axle angle is less or equal than:
-#define ANGLE_TOLERANCE  (2)
-//Start moving when the axle angle is more than:
-#define DEAD_ANGLE  (5)
-//Slow down the motor when actual angle is close to the target
-#define SLOW_ANGLE  (20)
+#define PARAMS_VERSION "0.1"
 
-//PWM percents: 100 => max power
-#define NO_PWM  (30)
-#define SLOW_START_PWM  (30)
-#define SLOW_PWM  (10)
-#define FAST_PWM  (100)
+typedef struct {
+    /* Angle parameters (degrees) */
+    uint16_t zero_restricted_angle;
+    uint16_t angle_tolerance;
+    uint16_t dead_angle;
+    uint16_t slow_angle;
+    uint16_t angle_reversed;
+    /* PWM parameters (percent 0–100) */
+    uint16_t no_pwm;
+    uint16_t slow_start_pwm;
+    uint16_t slow_pwm;
+    uint16_t fast_pwm;
+    /* Timing (ms) */
+    uint16_t slow_start_ms;
+} servo_params_t;
 
-// Test settings for prototype device
-//#define SLOW_PWM  (75)
-//#define FAST_PWM  (60)
+#define PARAMS_DEFAULTS { \
+    .zero_restricted_angle = 5, \
+    .angle_tolerance = 2, \
+    .dead_angle = 5, \
+    .slow_angle = 20, \
+    .angle_reversed = 0, \
+    .no_pwm = 30, \
+    .slow_start_pwm = 30, \
+    .slow_pwm = 10, \
+    .fast_pwm = 100, \
+    .slow_start_ms = 200, \
+}
 
-//Slow start milliseconds
-#define SLOW_START_MS (200)
+/* Global runtime params — written by core 0, read by core 1. */
+extern volatile servo_params_t g_params;
 
-#endif //RPI_PICO_SERVO_PARAMS_H
+/* Serialize params to "key=value\n" text. Returns length written (excl. NUL). */
+int params_serialize(char *buf, int maxlen);
+
+/* Parse "key=value\n" text and update g_params. Unknown keys are ignored.
+ * Returns true if at least one param was updated. */
+bool params_deserialize(const char *buf, int len);
+
+void params_load_from_flash(void);
+bool params_save_to_flash(void);
+
+#endif

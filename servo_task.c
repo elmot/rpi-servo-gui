@@ -6,6 +6,7 @@
 #include "as560x.h"
 #include "tusb.h"
 #include "pico/multicore.h"
+#include "pico/flash.h"
 
 _Noreturn void magnetError(void);
 
@@ -35,6 +36,8 @@ _Noreturn void magnetError(void) {
 }
 
 void servo_core1_entry(void) {
+    flash_safe_execute_core_init();
+
     gpio_init(LED_PIN);
     gpio_set_dir(LED_PIN, GPIO_OUT);
     init_pwm();
@@ -59,27 +62,29 @@ void servo_core1_entry(void) {
         if (pwm < PWM_LOW_LIMIT) pwm = PWM_LOW_LIMIT;
         else if (pwm > PWM_HIGH_LIMIT) pwm = PWM_HIGH_LIMIT;
 
-        int target_angle = ZERO_RESTRICTED_ANGLE +
-            ((pwm - PWM_LOW_LIMIT) * (360 - 2 * ZERO_RESTRICTED_ANGLE)) /
+        int zra = g_params.zero_restricted_angle;
+        int target_angle = zra +
+            ((pwm - PWM_LOW_LIMIT) * (360 - 2 * zra)) /
             (PWM_HIGH_LIMIT - PWM_LOW_LIMIT);
 
         int angle = as560xReadAngle() * 360L / AS5601_ANGLE_MAX;
+        if (g_params.angle_reversed) angle = 360 - angle;
         int angle_delta = target_angle - angle;
         int angle_delta_abs = abs(angle_delta);
-        int angle_tolerance = moving ? ANGLE_TOLERANCE : DEAD_ANGLE;
+        int angle_tolerance = moving ? g_params.angle_tolerance : g_params.dead_angle;
 
         if (angle_delta_abs > angle_tolerance) {
             gpio_put(LED_PIN, 1);
             moving = true;
-            int motor_pwm = (angle_delta_abs > SLOW_ANGLE) ? FAST_PWM : SLOW_PWM;
+            int motor_pwm = (angle_delta_abs > g_params.slow_angle) ? g_params.fast_pwm : g_params.slow_pwm;
             if (angle_delta > 0) {
-                setMotorPwm(motor_pwm, NO_PWM);
+                setMotorPwm(motor_pwm, g_params.no_pwm);
             } else {
-                setMotorPwm(NO_PWM, motor_pwm);
+                setMotorPwm(g_params.no_pwm, motor_pwm);
             }
         } else {
             gpio_put(LED_PIN, 0);
-            setMotorPwm(NO_PWM, NO_PWM);
+            setMotorPwm(g_params.no_pwm, g_params.no_pwm);
             moving = false;
         }
     }
