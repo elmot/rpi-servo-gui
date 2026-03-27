@@ -35,7 +35,15 @@
     .check-row { margin: 0.4em 0; }
     .check-row label { font-size: 0.9em; }
     .check-row input[type=checkbox] { width: 2.3em; height: 2.3em; vertical-align: middle; }
-    #versionInfo { font-family: monospace; color: #888; margin: 0.5em 0; }
+    #logToggle {
+      position: fixed; z-index: 10; background: #333; color: #0f0;
+      border: none; font-family: monospace; font-size: 0.8em;
+      padding: 0.2em 0.6em; cursor: pointer;
+    }
+    /* Landscape: top-right of log panel */
+    #logToggle { top: 0; right: 0; }
+    #logBox.collapsed { display: none; }
+    body.log-collapsed { margin-right: 1em; }
 
     @media (orientation: portrait) {
       body { margin-right: 1em; margin-bottom: 35vh; }
@@ -45,6 +53,9 @@
         border-left: none; border-top: 2px solid #444;
       }
       .angle-section { flex-direction: column; }
+      #logToggle { top: auto; bottom: 30vh; left: 0; right: auto; }
+      body.log-collapsed { margin-bottom: 1em; }
+      body.log-collapsed #logToggle { bottom: 0; }
     }
   </style>
 </head>
@@ -58,7 +69,6 @@
     <button id="btnReset" disabled>Reset Defaults</button>
   </div>
   <div id="status">Not connected</div>
-  <div id="versionInfo"></div>
 
   <div id="controls" class="controls">
     <div class="angle-section">
@@ -89,6 +99,7 @@
     <div class="slider-row"><label></label><input type="range" id="s_slow_start_ms" min="0" max="1000" step="10" value="200"></div>
   </div>
 
+  <button id="logToggle">Log</button>
   <div id="logBox"></div>
 
 <script>
@@ -117,7 +128,6 @@
   const statusEl = document.getElementById('status');
   const logBox = document.getElementById('logBox');
   const controlsEl = document.getElementById('controls');
-  const versionEl = document.getElementById('versionInfo');
 
   function setStatus(msg) { statusEl.textContent = msg; }
 
@@ -128,7 +138,6 @@
     document.getElementById('btnSave').disabled = !on;
     document.getElementById('btnReset').disabled = !on;
     controlsEl.classList.toggle('active', on);
-    if (!on) versionEl.textContent = '';
   }
 
   /* ---- Text key=value protocol ---- */
@@ -154,7 +163,7 @@
   }
 
   function populateFromMap(p) {
-    if (p.version) versionEl.textContent = 'Firmware version: ' + p.version;
+    if (p.version) setStatus('Connected, firmware v' + p.version);
     for (const f of SLIDER_FIELDS) {
       if (p[f] === undefined) continue;
       const s = document.getElementById('s_' + f);
@@ -259,9 +268,8 @@
       await device.open();
       if (device.configuration === null) await device.selectConfiguration(1);
       await device.claimInterface(INTERFACE);
-      setStatus('Connected: ' + device.productName);
       setConnected(true);
-      appendLog('--- Connected: ' + device.productName + ' ---');
+      appendLog('--- Connected ---');
 
       const result = await device.controlTransferIn({
         requestType: 'vendor', recipient: 'device',
@@ -330,6 +338,11 @@
   });
 
   /* ---- Log ---- */
+  document.getElementById('logToggle').addEventListener('click', () => {
+    logBox.classList.toggle('collapsed');
+    document.body.classList.toggle('log-collapsed');
+  });
+
   function appendLog(text) {
     logLines.push(text);
     if (logLines.length > MAX_LOG_LINES) logLines.shift();
