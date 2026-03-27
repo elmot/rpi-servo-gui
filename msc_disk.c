@@ -43,6 +43,9 @@
 static const char file_parameters[] = "version=" SERVO_VERSION "\n";
 #define FILE_PARAMETERS_SIZE (sizeof(file_parameters) - 1)  /* 12 bytes */
 
+static const char file_autorun[] = "[autorun]\r\nopen=index.htm\r\n";
+#define FILE_AUTORUN_SIZE (sizeof(file_autorun) - 1)
+
 /* Embedded from index.htm via CMake objcopy */
 extern const uint8_t file_index_html[];
 extern const uint8_t file_index_html_end[];
@@ -107,9 +110,11 @@ static uint32_t cluster_to_lba(uint32_t cluster) {
 static void generate_sector(uint32_t lba, uint8_t *buf) {
     memset(buf, 0, DISK_BLOCK_SIZE);
 
-    const uint32_t params_clusters = clusters_for(FILE_PARAMETERS_SIZE);
+    const uint32_t params_clusters  = clusters_for(FILE_PARAMETERS_SIZE);
     const uint32_t index_start     = PARAMS_START_CLUSTER + params_clusters;
     const uint32_t index_clusters  = clusters_for(FILE_INDEX_HTML_SIZE);
+    const uint32_t autorun_start   = index_start + index_clusters;
+    const uint32_t autorun_clusters = clusters_for(FILE_AUTORUN_SIZE);
 
     if (lba == 0) {
         /* ---- Boot sector ---- */
@@ -145,6 +150,11 @@ static void generate_sector(uint32_t lba, uint8_t *buf) {
                 /* index.htm chain */
                 val = (e == index_start + index_clusters - 1)
                     ? 0xFFFF : (uint16_t)(e + 1);
+            } else if (e >= autorun_start &&
+                       e < autorun_start + autorun_clusters) {
+                /* autorun.inf chain */
+                val = (e == autorun_start + autorun_clusters - 1)
+                    ? 0xFFFF : (uint16_t)(e + 1);
             }
 
             fat[e - entry_start] = val;
@@ -176,6 +186,14 @@ static void generate_sector(uint32_t lba, uint8_t *buf) {
         entries[2].cluster = index_start;
         entries[2].size = FILE_INDEX_HTML_SIZE;
 
+        /* autorun.inf — read-only */
+        memcpy(entries[3].name, "AUTORUN INF", 11);
+        entries[3].attr = 0x01 | 0x20;
+        entries[3].date = FAT_DATE;
+        entries[3].time = FAT_TIME;
+        entries[3].cluster = autorun_start;
+        entries[3].size = FILE_AUTORUN_SIZE;
+
     } else if (lba >= cluster_to_lba(PARAMS_START_CLUSTER) &&
                lba < cluster_to_lba(PARAMS_START_CLUSTER + params_clusters)) {
         /* ---- parameters.txt data ---- */
@@ -194,6 +212,16 @@ static void generate_sector(uint32_t lba, uint8_t *buf) {
             uint32_t copy_len = FILE_INDEX_HTML_SIZE - byte_offset;
             if (copy_len > DISK_BLOCK_SIZE) copy_len = DISK_BLOCK_SIZE;
             memcpy(buf, file_index_html + byte_offset, copy_len);
+        }
+
+    } else if (lba >= cluster_to_lba(autorun_start) &&
+               lba < cluster_to_lba(autorun_start + autorun_clusters)) {
+        /* ---- autorun.inf data ---- */
+        uint32_t byte_offset = (lba - cluster_to_lba(autorun_start)) * DISK_BLOCK_SIZE;
+        if (byte_offset < FILE_AUTORUN_SIZE) {
+            uint32_t copy_len = FILE_AUTORUN_SIZE - byte_offset;
+            if (copy_len > DISK_BLOCK_SIZE) copy_len = DISK_BLOCK_SIZE;
+            memcpy(buf, file_autorun + byte_offset, copy_len);
         }
     }
     /* All other sectors: zeros (already memset) */
