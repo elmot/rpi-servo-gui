@@ -11,6 +11,7 @@
 #define TEXT_BUF_SIZE       256
 
 volatile servo_params_t g_params;
+servo_telemetry_t g_telemetry;
 
 /* ---- Key/value table for serialization ---- */
 typedef struct {

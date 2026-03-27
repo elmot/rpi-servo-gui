@@ -1,5 +1,6 @@
 #include "bsp/board.h"
 #include "tusb.h"
+#include "pico/time.h"
 #include "pico/multicore.h"
 #include "params.h"
 #include "servo_errors.h"
@@ -40,7 +41,11 @@ static void log_task(void)
         }
     }
 
-    char log_buf[64];
+    static uint32_t next_ms = 0;
+    uint32_t now = to_ms_since_boot(get_absolute_time());
+    if (now < next_ms) return;
+
+    char log_buf[96];
     int len;
     if (servo_error_msg)
     {
@@ -48,12 +53,22 @@ static void log_task(void)
                        "[%lu] ERROR: %s\n",
                        (unsigned long)log_seq++,
                        servo_error_msg);
-
-        if (tud_vendor_write(log_buf, (uint32_t)len) > 0)
-        {
-            tud_vendor_flush();
-        }
         servo_error_msg = NULL;
+    } else {
+        len = snprintf(log_buf, sizeof(log_buf),
+                       "[%lu] pwm=%u angle=%d target=%d pwr=%d/%d\n",
+                       (unsigned long)log_seq++,
+                       g_telemetry.pwm_us,
+                       g_telemetry.current_angle,
+                       g_telemetry.target_angle,
+                       g_telemetry.power_a,
+                       g_telemetry.power_b);
+    }
+
+    if (tud_vendor_write(log_buf, (uint32_t)len) > 0)
+    {
+        tud_vendor_flush();
+        next_ms = now + 250;
     }
 }
 

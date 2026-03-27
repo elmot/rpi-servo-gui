@@ -48,4 +48,15 @@ bool params_deserialize(const char *buf, int len);
 void params_load_from_flash(void);
 bool params_save_to_flash(void);
 
+/* Telemetry — written by core 1, read by core 0 */
+typedef struct {
+    volatile uint16_t pwm_us;
+    volatile int16_t  current_angle;
+    volatile int16_t  target_angle;
+    volatile int16_t  power_a;
+    volatile int16_t  power_b;
+} servo_telemetry_t;
+
+extern servo_telemetry_t g_telemetry;
+
 #endif

@@ -73,19 +73,27 @@ void servo_core1_entry(void) {
         int angle_delta_abs = abs(angle_delta);
         int angle_tolerance = moving ? g_params.angle_tolerance : g_params.dead_angle;
 
+        int pwm_a, pwm_b;
         if (angle_delta_abs > angle_tolerance) {
             gpio_put(LED_PIN, 1);
             moving = true;
             int motor_pwm = (angle_delta_abs > g_params.slow_angle) ? g_params.fast_pwm : g_params.slow_pwm;
             if (angle_delta > 0) {
-                setMotorPwm(motor_pwm, g_params.no_pwm);
+                pwm_a = motor_pwm; pwm_b = g_params.no_pwm;
             } else {
-                setMotorPwm(g_params.no_pwm, motor_pwm);
+                pwm_a = g_params.no_pwm; pwm_b = motor_pwm;
             }
         } else {
             gpio_put(LED_PIN, 0);
-            setMotorPwm(g_params.no_pwm, g_params.no_pwm);
+            pwm_a = g_params.no_pwm; pwm_b = g_params.no_pwm;
             moving = false;
         }
+        setMotorPwm(pwm_a, pwm_b);
+
+        g_telemetry.pwm_us = pwm_count;
+        g_telemetry.current_angle = (int16_t)angle;
+        g_telemetry.target_angle = (int16_t)target_angle;
+        g_telemetry.power_a = (int16_t)pwm_a;
+        g_telemetry.power_b = (int16_t)pwm_b;
     }
 }
