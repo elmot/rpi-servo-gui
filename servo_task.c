@@ -11,9 +11,9 @@
 
 typedef enum {
     MOTOR_STOPPED,
-    MOTOR_FORWARD,
-    MOTOR_REVERSE,
-    MOTOR_PAUSING   /* direction change pause */
+    MOTOR_RAMPING,  /* starting: linear ramp from cutoff to target speed */
+    MOTOR_RUNNING,  /* at full requested speed */
+    MOTOR_PAUSING   /* direction change: motor off for slow_start_ms */
 } motor_state_t;
 
 _Noreturn void magnetError(void);
@@ -57,7 +57,9 @@ void servo_core1_entry(void) {
     gpio_pull_up(I2C_SCL_PIN);
 
     motor_state_t motor_state = MOTOR_STOPPED;
-    uint32_t pause_deadline = 0;
+    int motor_direction = 0;  /* +1 or -1 */
+    uint32_t ramp_start = 0;
+    uint32_t ramp_end = 0;
     while (1) {
         uint8_t status = (uint8_t)as560xGetStatus();
         if (!(status & AS560x_STATUS_MAGNET_DETECTED)) {
@@ -81,33 +83,66 @@ void servo_core1_entry(void) {
         if (g_params.angle_reversed) angle = 360 - angle;
         int angle_delta = target_angle - angle;
         int angle_delta_abs = abs(angle_delta);
-        bool is_moving = (motor_state == MOTOR_FORWARD || motor_state == MOTOR_REVERSE || motor_state == MOTOR_PAUSING);
-        int angle_tolerance = is_moving ? g_params.angle_tolerance : g_params.dead_angle;
+        bool is_active = (motor_state != MOTOR_STOPPED);
+        int angle_tolerance = is_active ? g_params.angle_tolerance : g_params.dead_angle;
 
         int pwm_a, pwm_b;
         if (angle_delta_abs > angle_tolerance) {
             gpio_put(LED_PIN, 1);
-            motor_state_t wanted = (angle_delta > 0) ? MOTOR_FORWARD : MOTOR_REVERSE;
+            int wanted_dir = (angle_delta > 0) ? 1 : -1;
+            int target_speed = (angle_delta_abs > g_params.slow_angle) ? g_params.fast_pwm : g_params.slow_pwm;
+            uint32_t now = to_ms_since_boot(get_absolute_time());
 
             if (motor_state == MOTOR_PAUSING) {
-                /* Wait for pause to finish */
-                if (to_ms_since_boot(get_absolute_time()) >= pause_deadline) {
-                    motor_state = wanted;
+                /* Waiting for direction-change pause to finish */
+                if (now >= ramp_end) {
+                    /* Pause done — start ramping in new direction */
+                    motor_direction = wanted_dir;
+                    motor_state = MOTOR_RAMPING;
+                    ramp_start = now;
+                    ramp_end = now + g_params.slow_start_ms;
                 }
                 pwm_a = 0; pwm_b = 0;
-            } else if (is_moving && motor_state != wanted) {
-                /* Direction change — start pause */
+
+            } else if (is_active && wanted_dir != motor_direction) {
+                /* Direction change — pause first */
                 motor_state = MOTOR_PAUSING;
-                pause_deadline = to_ms_since_boot(get_absolute_time()) + g_params.slow_start_ms;
+                ramp_start = now;
+                ramp_end = now + g_params.slow_start_ms;
                 pwm_a = 0; pwm_b = 0;
-            } else {
-                motor_state = wanted;
-                int motor_pwm = (angle_delta_abs > g_params.slow_angle) ? g_params.fast_pwm : g_params.slow_pwm;
-                if (wanted == MOTOR_FORWARD) {
-                    pwm_a = motor_pwm; pwm_b = 0;
+
+            } else if (motor_state == MOTOR_STOPPED) {
+                /* Start from stop — begin ramping */
+                motor_direction = wanted_dir;
+                motor_state = MOTOR_RAMPING;
+                ramp_start = now;
+                ramp_end = now + g_params.slow_start_ms;
+                /* First iteration: use cutoff_pwm */
+                int motor_pwm = g_params.cutoff_pwm;
+                if (motor_direction > 0) { pwm_a = motor_pwm; pwm_b = 0; }
+                else                     { pwm_a = 0; pwm_b = motor_pwm; }
+
+            } else if (motor_state == MOTOR_RAMPING) {
+                /* Linear ramp: cutoff_pwm → target_speed over slow_start_ms */
+                uint32_t elapsed = now - ramp_start;
+                uint32_t duration = ramp_end - ramp_start;
+                int motor_pwm;
+                if (elapsed >= duration || duration == 0) {
+                    motor_pwm = target_speed;
+                    motor_state = MOTOR_RUNNING;
                 } else {
-                    pwm_a = 0; pwm_b = motor_pwm;
+                    int lo = g_params.cutoff_pwm;
+                    motor_pwm = lo + (target_speed - lo) * (int)elapsed / (int)duration;
                 }
+                if (motor_direction > 0) { pwm_a = motor_pwm; pwm_b = 0; }
+                else                     { pwm_a = 0; pwm_b = motor_pwm; }
+
+            } else {
+                /* MOTOR_RUNNING — full requested speed */
+                motor_direction = wanted_dir;
+                int motor_pwm = target_speed;
+                if (motor_direction > 0) { pwm_a = motor_pwm; pwm_b = 0; }
+                else                     { pwm_a = 0; pwm_b = motor_pwm; }
             }
         } else {
             gpio_put(LED_PIN, 0);
