@@ -54,11 +54,12 @@ void servo_core1_entry(void) {
         if (!(status & AS560x_STATUS_MAGNET_DETECTED)) {
             magnetError();
         }
-        if (pwm_count == 0) continue;
+        uint16_t raw_pwm = g_params.pwm_mock ? g_params.pwm_mock : pwm_count;
+        if (raw_pwm == 0) continue;
 
 #define PWM_LOW_LIMIT  (1450)
 #define PWM_HIGH_LIMIT (1550)
-        uint16_t pwm = pwm_count;
+        uint16_t pwm = raw_pwm;
         if (pwm < PWM_LOW_LIMIT) pwm = PWM_LOW_LIMIT;
         else if (pwm > PWM_HIGH_LIMIT) pwm = PWM_HIGH_LIMIT;
 

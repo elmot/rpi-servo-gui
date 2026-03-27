@@ -17,9 +17,11 @@ servo_telemetry_t g_telemetry;
 typedef struct {
     const char *key;
     size_t offset;
+    bool persist;
 } param_entry_t;
 
-#define ENTRY(field) { #field, offsetof(servo_params_t, field) }
+#define ENTRY(field)      { #field, offsetof(servo_params_t, field), true }
+#define ENTRY_VOLATILE(field) { #field, offsetof(servo_params_t, field), false }
 
 static const param_entry_t param_table[] = {
     ENTRY(zero_restricted_angle),
@@ -32,17 +34,23 @@ static const param_entry_t param_table[] = {
     ENTRY(slow_pwm),
     ENTRY(fast_pwm),
     ENTRY(slow_start_ms),
+    ENTRY_VOLATILE(pwm_mock),
 };
 
 #define PARAM_COUNT (sizeof(param_table) / sizeof(param_table[0]))
 
-int params_serialize(char *buf, int maxlen) {
+static int serialize_impl(char *buf, int maxlen, bool persist_only) {
     int pos = snprintf(buf, maxlen, "version=%s\n", PARAMS_VERSION);
     for (unsigned i = 0; i < PARAM_COUNT && pos < maxlen; i++) {
+        if (persist_only && !param_table[i].persist) continue;
         uint16_t val = *(const volatile uint16_t *)((const char *)&g_params + param_table[i].offset);
         pos += snprintf(buf + pos, maxlen - pos, "%s=%u\n", param_table[i].key, val);
     }
     return pos;
+}
+
+int params_serialize(char *buf, int maxlen) {
+    return serialize_impl(buf, maxlen, false);
 }
 
 bool params_deserialize(const char *buf, int len) {
@@ -112,7 +120,7 @@ static void do_flash_write(void *param) {
     (void)param;
     uint8_t page[FLASH_PAGE_SIZE];
     memset(page, 0xFF, sizeof(page));
-    int len = params_serialize((char *)page, FLASH_PAGE_SIZE - 1);
+    int len = serialize_impl((char *)page, FLASH_PAGE_SIZE - 1, true);
     page[len] = '\0';
     flash_range_erase(FLASH_PARAMS_OFFSET, FLASH_SECTOR_SIZE);
     flash_range_program(FLASH_PARAMS_OFFSET, page, FLASH_PAGE_SIZE);

@@ -97,6 +97,10 @@
     <h3>Timing</h3>
     <div class="bar-row"><label>Slow start</label><div class="bar-bg"><div class="bar-fill" id="b_slow_start_ms" style="width:20%;background:#c6f"></div></div><span class="val" id="v_slow_start_ms">200</span>ms</div>
     <div class="slider-row"><label></label><input type="range" id="s_slow_start_ms" min="0" max="1000" step="10" value="200"></div>
+
+    <h3>Debug</h3>
+    <div class="check-row"><label><input type="checkbox" id="s_pwm_mock_enabled"> Mock PWM input</label></div>
+    <div class="slider-row"><label>Mock value</label><input type="range" id="s_pwm_mock" min="1000" max="2000" step="1" value="1500" disabled><span class="val" id="v_pwm_mock">1500</span>&micro;s</div>
   </div>
 
   <button id="logToggle">Log</button>
@@ -159,6 +163,9 @@
       lines.push(f + '=' + document.getElementById('s_' + f).value);
     }
     lines.push('angle_reversed=' + (document.getElementById('s_angle_reversed').checked ? '1' : '0'));
+    const mock = document.getElementById('s_pwm_mock_enabled').checked
+        ? document.getElementById('s_pwm_mock').value : '0';
+    lines.push('pwm_mock=' + mock);
     return lines.join('\n') + '\n';
   }
 
@@ -172,6 +179,15 @@
     }
     if (p.angle_reversed !== undefined) {
       document.getElementById('s_angle_reversed').checked = (parseInt(p.angle_reversed) !== 0);
+    }
+    if (p.pwm_mock !== undefined) {
+      const val = parseInt(p.pwm_mock);
+      document.getElementById('s_pwm_mock_enabled').checked = (val !== 0);
+      document.getElementById('s_pwm_mock').disabled = (val === 0);
+      if (val !== 0) {
+        document.getElementById('s_pwm_mock').value = val;
+        document.getElementById('v_pwm_mock').textContent = val;
+      }
     }
     drawAngleCircle();
     checkAngleWarnings();
@@ -260,6 +276,17 @@
     });
   }
   document.getElementById('s_angle_reversed').addEventListener('change', () => scheduleSend());
+
+  const mockCheckbox = document.getElementById('s_pwm_mock_enabled');
+  const mockSlider = document.getElementById('s_pwm_mock');
+  mockCheckbox.addEventListener('change', () => {
+    mockSlider.disabled = !mockCheckbox.checked;
+    scheduleSend();
+  });
+  mockSlider.addEventListener('input', () => {
+    document.getElementById('v_pwm_mock').textContent = mockSlider.value;
+    scheduleSend();
+  });
 
   /* ---- Connection ---- */
   document.getElementById('btnConnect').addEventListener('click', async () => {

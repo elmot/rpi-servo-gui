@@ -20,6 +20,8 @@ typedef struct {
     uint16_t fast_pwm;
     /* Timing (ms) */
     uint16_t slow_start_ms;
+    /* Debug: 0 = use real PWM input, nonzero = mock value in microseconds */
+    uint16_t pwm_mock;
 } servo_params_t;
 
 #define PARAMS_DEFAULTS { \
@@ -33,6 +35,7 @@ typedef struct {
     .slow_pwm = 10, \
     .fast_pwm = 100, \
     .slow_start_ms = 200, \
+    .pwm_mock = 0, \
 }
 
 /* Global runtime params — written by core 0, read by core 1. */
