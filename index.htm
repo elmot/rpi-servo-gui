@@ -30,6 +30,7 @@
   <h1>Elmot Smart Servo</h1>
   <button id="btnConnect">Connect</button>
   <button id="btnDisconnect" disabled>Disconnect</button>
+  <button id="btnRestart" disabled>Restart Device</button>
   <div id="status">Not connected</div>
   <div id="params"></div>
   <div id="logBox"></div>
@@ -38,6 +39,7 @@
   const VID = 0xCAFE;
   const PID = 0x4002;
   const VENDOR_REQUEST_PARAMS = 0x03;
+  const VENDOR_REQUEST_REBOOT = 0x04;
   const INTERFACE = 0;
   const EP_IN = 0x01;
 
@@ -50,12 +52,14 @@
   const logBox = document.getElementById('logBox');
   const btnConnect = document.getElementById('btnConnect');
   const btnDisconnect = document.getElementById('btnDisconnect');
+  const btnRestart = document.getElementById('btnRestart');
 
   function setStatus(msg) { status.textContent = msg; }
 
   function setConnected(on) {
     btnConnect.disabled = on;
     btnDisconnect.disabled = !on;
+    btnRestart.disabled = !on;
   }
 
   async function readParams() {
@@ -77,6 +81,7 @@
     if (dev) {
       try { await dev.close(); } catch (e) { /* ignore */ }
     }
+    appendLog('--- Disconnected ---');
     setStatus('Disconnected');
   }
 
@@ -92,6 +97,7 @@
       await device.claimInterface(INTERFACE);
       setStatus('Connected: ' + device.productName);
       setConnected(true);
+      appendLog('--- Connected: ' + device.productName + ' ---');
 
       paramsDiv.textContent = await readParams();
 
@@ -104,11 +110,30 @@
 
   btnDisconnect.addEventListener('click', () => disconnect());
 
+  btnRestart.addEventListener('click', async () => {
+    if (!device) return;
+    try {
+      await device.controlTransferOut({
+        requestType: 'vendor',
+        recipient: 'device',
+        request: VENDOR_REQUEST_REBOOT,
+        value: 0,
+        index: 0
+      });
+    } catch (e) { /* device reboots, connection drops */ }
+    device = null;
+    setConnected(false);
+    paramsDiv.textContent = '';
+    appendLog('--- Restart requested ---');
+    setStatus('Device restarting...');
+  });
+
   navigator.usb.addEventListener('disconnect', (e) => {
     if (device && e.device === device) {
       device = null;
       setConnected(false);
       paramsDiv.textContent = '';
+      appendLog('--- Device unplugged ---');
       setStatus('Device unplugged');
     }
   });
@@ -130,8 +155,8 @@
       } catch (e) {
         if (device) {
           console.error('Log error:', e);
+          appendLog('--- Connection lost ---');
           await disconnect();
-          setStatus('Connection lost');
         }
         break;
       }

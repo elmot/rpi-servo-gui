@@ -1,27 +1,37 @@
 /* Servo control loop — runs on core 1 */
 
 #include "servo.h"
+#include "servo_errors.h"
 #include "params.h"
 #include "as560x.h"
+#include "tusb.h"
+#include "pico/multicore.h"
 
 _Noreturn void magnetError(void);
 
-_Noreturn static inline void error(int phase_on_ms, int phase_off_ms) {
-    watchdog_enable(500, 1);
+_Noreturn static inline void error(uint32_t error_code, int phase_on_ms, int phase_off_ms) {
+    setMotorPwm(0, 0);
+    multicore_fifo_push_blocking(error_code);
+    watchdog_enable(5000, 1);
     while (1) {
-        gpio_put(LED_PIN, 1);
-        sleep_ms(phase_on_ms);
-        gpio_put(LED_PIN, 0);
-        sleep_ms(phase_off_ms);
+        if (tud_connected())
+        {
+            watchdog_update();
+        }
+            gpio_put(LED_PIN, 1);
+            sleep_ms(phase_on_ms);
+            gpio_put(LED_PIN, 0);
+            sleep_ms(phase_off_ms);
+
     }
 }
 
 _Noreturn void i2cError(void) {
-    error(300, 30);
+    error(SERVO_ERR_I2C, 300, 30);
 }
 
 _Noreturn void magnetError(void) {
-    error(700, 300);
+    error(SERVO_ERR_MAGNET, 700, 300);
 }
 
 void servo_core1_entry(void) {

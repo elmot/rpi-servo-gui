@@ -22,6 +22,7 @@
 #define VENDOR_REQUEST_WEBUSB    0x01  /* bRequest for WebUSB GET_URL */
 #define VENDOR_REQUEST_MICROSOFT 0x02  /* bRequest for MS OS 2.0 descriptor set */
 #define VENDOR_REQUEST_PARAMS    0x03  /* bRequest for reading device parameters */
+#define VENDOR_REQUEST_REBOOT   0x04  /* bRequest to reboot the device */
 
 /* ---- WebUSB landing page URL (https:// prefix implied by bScheme=1) ---- */
 #define URL "localhost:8000/usb" //todo set normal URL
@@ -214,6 +215,14 @@ bool tud_vendor_control_xfer_cb(uint8_t rhport, uint8_t stage, const tusb_contro
         case VENDOR_REQUEST_PARAMS:
             return tud_control_xfer(rhport, request, (void *)(uintptr_t)params, (uint16_t)strlen(params));
 
+        case VENDOR_REQUEST_REBOOT: {
+            /* ACK the control transfer first, then schedule reboot */
+            tud_control_status(rhport, request);
+            extern void schedule_reboot(void);
+            schedule_reboot();
+            return true;
+        }
+
         default:
             return false;
     }
@@ -237,14 +246,14 @@ static const char *string_desc_arr[] = {
     "Elmot Servo Virtual Disk"         /* 5: MSC interface */
 };
 
-static uint16_t _desc_str[32];
+static uint16_t desc_str[32];
 
 uint16_t const *tud_descriptor_string_cb(uint8_t index, uint16_t langid) {
     (void)langid;
 
     uint8_t chr_count;
     if (index == 0) {
-        _desc_str[1] = 0x0409;
+        desc_str[1] = 0x0409;
         chr_count = 1;
     } else {
         if (index >= sizeof(string_desc_arr) / sizeof(string_desc_arr[0])) {
@@ -258,10 +267,10 @@ uint16_t const *tud_descriptor_string_cb(uint8_t index, uint16_t langid) {
         }
 
         for (uint8_t i = 0; i < chr_count; i++) {
-            _desc_str[1 + i] = (uint8_t)str[i];
+            desc_str[1 + i] = (uint8_t)str[i];
         }
     }
 
-    _desc_str[0] = (uint16_t)((TUSB_DESC_STRING << 8) | (2 * chr_count + 2));
-    return _desc_str;
+    desc_str[0] = (uint16_t)((TUSB_DESC_STRING << 8) | (2 * chr_count + 2));
+    return desc_str;
 }
