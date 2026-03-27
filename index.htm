@@ -36,6 +36,16 @@
     .check-row label { font-size: 0.9em; }
     .check-row input[type=checkbox] { width: 2.3em; height: 2.3em; vertical-align: middle; }
     #versionInfo { font-family: monospace; color: #888; margin: 0.5em 0; }
+
+    @media (orientation: portrait) {
+      body { margin-right: 1em; margin-bottom: 35vh; }
+      #logBox {
+        position: fixed; left: 0; right: 0; bottom: 0;
+        top: auto; width: auto; height: 30vh;
+        border-left: none; border-top: 2px solid #444;
+      }
+      .angle-section { flex-direction: column; }
+    }
   </style>
 </head>
 <body>
