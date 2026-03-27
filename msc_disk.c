@@ -22,15 +22,22 @@
 #include <string.h>
 
 /* ---- Disk geometry ---- */
-#define DISK_BLOCK_SIZE   512
-#define DISK_BLOCK_COUNT  6144   /* 3 MB */
-#define SECTORS_PER_CLUSTER 4
-#define RESERVED_SECTORS  1
-#define NUM_FATS          2
-#define FAT_SECTORS       6      /* ceil((1534 entries * 2) / 512) */
-#define ROOT_ENTRY_COUNT  16
-#define ROOT_DIR_SECTORS  1      /* 16 * 32 / 512 */
-#define DATA_START_SECTOR (RESERVED_SECTORS + NUM_FATS * FAT_SECTORS + ROOT_DIR_SECTORS)  /* 14 */
+/* FAT16 requires >= 4085 data clusters. With 3 MB and 1 sector/cluster we get
+ * ~6094 clusters, safely in FAT16 territory.  (4 sectors/cluster would give only
+ * ~1532 clusters, which Windows interprets as FAT12.) */
+#define DISK_BLOCK_SIZE     512
+#define DISK_BLOCK_COUNT    6144   /* 3 MB */
+#define SECTORS_PER_CLUSTER 1
+#define CLUSTER_SIZE        (SECTORS_PER_CLUSTER * DISK_BLOCK_SIZE)  /* 512 */
+#define RESERVED_SECTORS    1
+#define NUM_FATS            2
+#define FAT_SECTORS         24     /* ceil((6096 entries * 2) / 512) */
+#define ROOT_ENTRY_COUNT    16
+#define ROOT_DIR_SECTORS    1      /* 16 * 32 / 512 */
+#define DATA_START_SECTOR   (RESERVED_SECTORS + NUM_FATS * FAT_SECTORS + ROOT_DIR_SECTORS)  /* 50 */
+
+/* First data cluster is always cluster 2 in FAT */
+#define PARAMS_START_CLUSTER 2
 
 /* ---- File contents ---- */
 static const char file_parameters[] = "version=0.1\n";
@@ -85,11 +92,24 @@ _Static_assert(sizeof(fat_dir_entry_t) == 32, "dir entry must be 32 bytes");
 #define FAT_DATE 0x5A21
 #define FAT_TIME 0x0000
 
+/* Helpers — computed at runtime since FILE_INDEX_HTML_SIZE is from extern symbols */
+static uint32_t clusters_for(uint32_t file_size) {
+    return (file_size + CLUSTER_SIZE - 1) / CLUSTER_SIZE;
+}
+
+static uint32_t cluster_to_lba(uint32_t cluster) {
+    return DATA_START_SECTOR + (cluster - 2) * SECTORS_PER_CLUSTER;
+}
+
 /* ==========================================================================
  * Generate one 512-byte sector on the fly
  * ========================================================================== */
 static void generate_sector(uint32_t lba, uint8_t *buf) {
     memset(buf, 0, DISK_BLOCK_SIZE);
+
+    const uint32_t params_clusters = clusters_for(FILE_PARAMETERS_SIZE);
+    const uint32_t index_start     = PARAMS_START_CLUSTER + params_clusters;
+    const uint32_t index_clusters  = clusters_for(FILE_INDEX_HTML_SIZE);
 
     if (lba == 0) {
         /* ---- Boot sector ---- */
@@ -98,20 +118,37 @@ static void generate_sector(uint32_t lba, uint8_t *buf) {
     } else if ((lba >= 1 && lba <= FAT_SECTORS) ||
                (lba >= 1 + FAT_SECTORS && lba <= 2 * FAT_SECTORS)) {
         /* ---- FAT #1 or FAT #2 (identical) ---- */
-        uint32_t fat_offset_sector = (lba >= 1 + FAT_SECTORS)
-                                   ? lba - 1 - FAT_SECTORS  /* FAT #2 */
-                                   : lba - 1;                /* FAT #1 */
+        uint32_t fat_sector = (lba >= 1 + FAT_SECTORS)
+                            ? lba - 1 - FAT_SECTORS   /* FAT #2 */
+                            : lba - 1;                 /* FAT #1 */
 
-        if (fat_offset_sector == 0) {
-            /* First FAT sector: media type + EOC, then file entries */
-            uint16_t *fat = (uint16_t *)buf;
-            fat[0] = 0xFFF8;  /* Media type */
-            fat[1] = 0xFFFF;  /* End-of-chain marker */
-            fat[2] = 0xFFFF;  /* parameters.txt — 1 cluster, end */
-            fat[3] = 0xFFFF;  /* index.html — 1 cluster, end */
-            /* entries 4+ stay 0x0000 (free) */
+        /* Each FAT sector holds 256 entries (512 / 2).
+         * Compute which entry range this sector covers. */
+        uint32_t entry_start = fat_sector * (DISK_BLOCK_SIZE / 2);
+        uint32_t entry_end   = entry_start + (DISK_BLOCK_SIZE / 2);
+        uint16_t *fat = (uint16_t *)buf;
+
+        for (uint32_t e = entry_start; e < entry_end; e++) {
+            uint16_t val = 0x0000;  /* free */
+
+            if (e == 0) {
+                val = 0xFFF8;  /* media type */
+            } else if (e == 1) {
+                val = 0xFFFF;  /* EOC marker */
+            } else if (e >= PARAMS_START_CLUSTER &&
+                       e < PARAMS_START_CLUSTER + params_clusters) {
+                /* parameters.txt chain */
+                val = (e == PARAMS_START_CLUSTER + params_clusters - 1)
+                    ? 0xFFFF : (uint16_t)(e + 1);
+            } else if (e >= index_start &&
+                       e < index_start + index_clusters) {
+                /* index.htm chain */
+                val = (e == index_start + index_clusters - 1)
+                    ? 0xFFFF : (uint16_t)(e + 1);
+            }
+
+            fat[e - entry_start] = val;
         }
-        /* Other FAT sectors are all zeros (free clusters) */
 
     } else if (lba == RESERVED_SECTORS + NUM_FATS * FAT_SECTORS) {
         /* ---- Root directory (sector 13) ---- */
@@ -119,43 +156,44 @@ static void generate_sector(uint32_t lba, uint8_t *buf) {
 
         /* Volume label */
         memcpy(entries[0].name, "SMARTSERVO ", 11);
-        entries[0].attr = 0x08;  /* Volume label attribute */
+        entries[0].attr = 0x08;
         entries[0].date = FAT_DATE;
         entries[0].time = FAT_TIME;
 
         /* parameters.txt — read-only */
         memcpy(entries[1].name, "PARAMS  TXT", 11);
-        entries[1].attr = 0x01 | 0x20;  /* Read-only + archive */
+        entries[1].attr = 0x01 | 0x20;
         entries[1].date = FAT_DATE;
         entries[1].time = FAT_TIME;
-        entries[1].cluster = 2;
+        entries[1].cluster = PARAMS_START_CLUSTER;
         entries[1].size = FILE_PARAMETERS_SIZE;
 
-        /* index.html — read-only */
+        /* index.htm — read-only */
         memcpy(entries[2].name, "INDEX   HTM", 11);
-        entries[2].attr = 0x01 | 0x20;  /* Read-only + archive */
+        entries[2].attr = 0x01 | 0x20;
         entries[2].date = FAT_DATE;
         entries[2].time = FAT_TIME;
-        entries[2].cluster = 3;
+        entries[2].cluster = index_start;
         entries[2].size = FILE_INDEX_HTML_SIZE;
 
-    } else if (lba >= DATA_START_SECTOR && lba < DATA_START_SECTOR + SECTORS_PER_CLUSTER) {
-        /* ---- Cluster 2: parameters.txt ---- */
-        uint32_t offset_in_cluster = (lba - DATA_START_SECTOR) * DISK_BLOCK_SIZE;
-        if (offset_in_cluster < FILE_PARAMETERS_SIZE) {
-            uint32_t copy_len = FILE_PARAMETERS_SIZE - offset_in_cluster;
+    } else if (lba >= cluster_to_lba(PARAMS_START_CLUSTER) &&
+               lba < cluster_to_lba(PARAMS_START_CLUSTER + params_clusters)) {
+        /* ---- parameters.txt data ---- */
+        uint32_t byte_offset = (lba - cluster_to_lba(PARAMS_START_CLUSTER)) * DISK_BLOCK_SIZE;
+        if (byte_offset < FILE_PARAMETERS_SIZE) {
+            uint32_t copy_len = FILE_PARAMETERS_SIZE - byte_offset;
             if (copy_len > DISK_BLOCK_SIZE) copy_len = DISK_BLOCK_SIZE;
-            memcpy(buf, file_parameters + offset_in_cluster, copy_len);
+            memcpy(buf, file_parameters + byte_offset, copy_len);
         }
 
-    } else if (lba >= DATA_START_SECTOR + SECTORS_PER_CLUSTER &&
-               lba < DATA_START_SECTOR + 2 * SECTORS_PER_CLUSTER) {
-        /* ---- Cluster 3: index.html ---- */
-        uint32_t offset_in_cluster = (lba - DATA_START_SECTOR - SECTORS_PER_CLUSTER) * DISK_BLOCK_SIZE;
-        if (offset_in_cluster < FILE_INDEX_HTML_SIZE) {
-            uint32_t copy_len = FILE_INDEX_HTML_SIZE - offset_in_cluster;
+    } else if (lba >= cluster_to_lba(index_start) &&
+               lba < cluster_to_lba(index_start + index_clusters)) {
+        /* ---- index.htm data ---- */
+        uint32_t byte_offset = (lba - cluster_to_lba(index_start)) * DISK_BLOCK_SIZE;
+        if (byte_offset < FILE_INDEX_HTML_SIZE) {
+            uint32_t copy_len = FILE_INDEX_HTML_SIZE - byte_offset;
             if (copy_len > DISK_BLOCK_SIZE) copy_len = DISK_BLOCK_SIZE;
-            memcpy(buf, file_index_html + offset_in_cluster, copy_len);
+            memcpy(buf, file_index_html + byte_offset, copy_len);
         }
     }
     /* All other sectors: zeros (already memset) */
@@ -175,13 +213,15 @@ void tud_msc_capacity_cb(uint8_t lun, uint32_t *block_count, uint16_t *block_siz
 /* Invoked when the host reads sectors */
 int32_t tud_msc_read10_cb(uint8_t lun, uint32_t lba, uint32_t offset, void *buffer, uint32_t bufsize) {
     (void)lun;
-    (void)offset;
 
+    /* offset is cumulative bytes already transferred for this SCSI READ command.
+     * Advance the LBA accordingly so multi-sector reads return the correct sectors. */
+    uint32_t actual_lba = lba + offset / DISK_BLOCK_SIZE;
     uint8_t *buf = (uint8_t *)buffer;
     uint32_t sectors = bufsize / DISK_BLOCK_SIZE;
 
     for (uint32_t i = 0; i < sectors; i++) {
-        generate_sector(lba + i, buf + i * DISK_BLOCK_SIZE);
+        generate_sector(actual_lba + i, buf + i * DISK_BLOCK_SIZE);
     }
 
     return (int32_t)bufsize;
@@ -218,6 +258,6 @@ bool tud_msc_is_writable_cb(uint8_t lun) {
 void tud_msc_inquiry_cb(uint8_t lun, uint8_t vendor_id[8], uint8_t product_id[16], uint8_t product_rev[4]) {
     (void)lun;
     memcpy(vendor_id,   "Elmot   ", 8);
-    memcpy(product_id,  "Smart Servo Cfg ", 16);
+    memcpy(product_id,  "Smart Servo     ", 16);
     memcpy(product_rev, "0.1 ", 4);
 }

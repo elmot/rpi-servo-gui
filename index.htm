@@ -1,5 +1,142 @@
 <!DOCTYPE html>
 <html>
-<head><title>Elmot Smart Servo</title></head>
-<body><h1>Hello, World!</h1></body>
+<head>
+  <meta charset="utf-8">
+  <title>Elmot Smart Servo</title>
+  <style>
+    body { font-family: sans-serif; margin: 2em; margin-right: 31%; margin-bottom: 8em; }
+    button { font-size: 1em; padding: 0.4em 1em; margin: 0.3em; }
+    #status { margin-top: 1em; color: #555; }
+    #params {
+      position: fixed; bottom: 0; left: 0; right: 30%;
+      min-height: 4.8em;
+      font-family: monospace; white-space: pre;
+      background: #f0f0f0; padding: 0.5em;
+      border-top: 2px solid #ccc;
+      overflow-y: auto;
+    }
+    #logBox {
+      position: fixed; top: 0; right: 0; bottom: 0;
+      width: 30%; overflow-y: auto;
+      background: #1e1e1e; color: #0f0;
+      font-family: monospace; font-size: 0.85em;
+      padding: 0.5em; margin: 0;
+      border-left: 2px solid #444;
+      white-space: pre;
+    }
+  </style>
+</head>
+<body>
+  <h1>Elmot Smart Servo</h1>
+  <button id="btnConnect">Connect</button>
+  <button id="btnDisconnect" disabled>Disconnect</button>
+  <div id="status">Not connected</div>
+  <div id="params"></div>
+  <div id="logBox"></div>
+
+<script>
+  const VID = 0xCAFE;
+  const PID = 0x4002;
+  const VENDOR_REQUEST_PARAMS = 0x03;
+  const INTERFACE = 0;
+  const EP_IN = 0x01;
+
+  const MAX_LOG_LINES = 500;
+  let device = null;
+  let logLines = [];
+
+  const status = document.getElementById('status');
+  const paramsDiv = document.getElementById('params');
+  const logBox = document.getElementById('logBox');
+  const btnConnect = document.getElementById('btnConnect');
+  const btnDisconnect = document.getElementById('btnDisconnect');
+
+  function setStatus(msg) { status.textContent = msg; }
+
+  function setConnected(on) {
+    btnConnect.disabled = on;
+    btnDisconnect.disabled = !on;
+  }
+
+  async function readParams() {
+    const result = await device.controlTransferIn({
+      requestType: 'vendor',
+      recipient: 'device',
+      request: VENDOR_REQUEST_PARAMS,
+      value: 0,
+      index: 0
+    }, 256);
+    return new TextDecoder().decode(result.data);
+  }
+
+  async function disconnect() {
+    const dev = device;
+    device = null;
+    setConnected(false);
+    paramsDiv.textContent = '';
+    if (dev) {
+      try { await dev.close(); } catch (e) { /* ignore */ }
+    }
+    setStatus('Disconnected');
+  }
+
+  btnConnect.addEventListener('click', async () => {
+    try {
+      device = await navigator.usb.requestDevice({
+        filters: [{ vendorId: VID, productId: PID }]
+      });
+      await device.open();
+      if (device.configuration === null) {
+        await device.selectConfiguration(1);
+      }
+      await device.claimInterface(INTERFACE);
+      setStatus('Connected: ' + device.productName);
+      setConnected(true);
+
+      paramsDiv.textContent = await readParams();
+
+      readLogLoop();
+    } catch (e) {
+      setStatus('Connection failed: ' + e.message);
+      console.error(e);
+    }
+  });
+
+  btnDisconnect.addEventListener('click', () => disconnect());
+
+  navigator.usb.addEventListener('disconnect', (e) => {
+    if (device && e.device === device) {
+      device = null;
+      setConnected(false);
+      paramsDiv.textContent = '';
+      setStatus('Device unplugged');
+    }
+  });
+
+  function appendLog(text) {
+    logLines.push(text);
+    if (logLines.length > MAX_LOG_LINES) {
+      logLines.shift();
+    }
+    logBox.textContent = logLines.join('\n');
+    logBox.scrollTop = logBox.scrollHeight;
+  }
+
+  async function readLogLoop() {
+    while (device) {
+      try {
+        const result = await device.transferIn(EP_IN, 256);
+        appendLog(new TextDecoder().decode(result.data).trimEnd());
+      } catch (e) {
+        if (device) {
+          console.error('Log error:', e);
+          await disconnect();
+          setStatus('Connection lost');
+        }
+        break;
+      }
+    }
+  }
+</script>
+</body>
 </html>

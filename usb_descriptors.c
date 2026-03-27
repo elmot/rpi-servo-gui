@@ -21,6 +21,7 @@
 /* ---- Vendor request codes (used in BOS capabilities and control xfer handler) ---- */
 #define VENDOR_REQUEST_WEBUSB    0x01  /* bRequest for WebUSB GET_URL */
 #define VENDOR_REQUEST_MICROSOFT 0x02  /* bRequest for MS OS 2.0 descriptor set */
+#define VENDOR_REQUEST_PARAMS    0x03  /* bRequest for reading device parameters */
 
 /* ---- WebUSB landing page URL (https:// prefix implied by bScheme=1) ---- */
 #define URL "localhost:8000/usb" //todo set normal URL
@@ -183,7 +184,12 @@ static const tusb_desc_webusb_url_t desc_url = {
  *   0x01 (VENDOR_REQUEST_WEBUSB)    → return WebUSB URL descriptor
  *   0x02 (VENDOR_REQUEST_MICROSOFT) → return MS OS 2.0 descriptor set
  *                                      (only for wIndex == 0x0007)
+ *   0x03 (VENDOR_REQUEST_PARAMS)    → return device parameters string
  * ========================================================================== */
+
+/* Defined in main.c */
+extern const char params[];
+
 bool tud_vendor_control_xfer_cb(uint8_t rhport, uint8_t stage, const tusb_control_request_t *request) {
     if (stage != CONTROL_STAGE_SETUP) {
         return true;
@@ -205,6 +211,9 @@ bool tud_vendor_control_xfer_cb(uint8_t rhport, uint8_t stage, const tusb_contro
             }
             return false;
 
+        case VENDOR_REQUEST_PARAMS:
+            return tud_control_xfer(rhport, request, (void *)(uintptr_t)params, (uint16_t)strlen(params));
+
         default:
             return false;
     }
@@ -224,8 +233,8 @@ static const char *string_desc_arr[] = {
     "Elmot",                     /* 1: Manufacturer */
     "Elmot Smart Servo",         /* 2: Product */
     "0001",                      /* 3: Serial */
-    "WebUSB Vendor",             /* 4: Vendor interface */
-    "Smart Servo Config"         /* 5: MSC interface */
+    "Elmot Smart Servo",         /* 4: Vendor interface */
+    "Elmot Servo Virtual Disk"         /* 5: MSC interface */
 };
 
 static uint16_t _desc_str[32];

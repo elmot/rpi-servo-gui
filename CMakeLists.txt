@@ -18,6 +18,7 @@ add_executable(${CMAKE_PROJECT_NAME}
 # make sure it can find index.htm in the source tree.
 set_source_files_properties(index_htm_embed.S PROPERTIES
     COMPILE_FLAGS "-I${CMAKE_CURRENT_SOURCE_DIR}"
+    OBJECT_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/index.htm"
 )
 
 target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
