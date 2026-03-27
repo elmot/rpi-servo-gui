@@ -7,6 +7,14 @@
 #include "tusb.h"
 #include "pico/multicore.h"
 #include "pico/flash.h"
+#include "pico/time.h"
+
+typedef enum {
+    MOTOR_STOPPED,
+    MOTOR_FORWARD,
+    MOTOR_REVERSE,
+    MOTOR_PAUSING   /* direction change pause */
+} motor_state_t;
 
 _Noreturn void magnetError(void);
 
@@ -48,7 +56,8 @@ void servo_core1_entry(void) {
     gpio_pull_up(I2C_SDA_PIN);
     gpio_pull_up(I2C_SCL_PIN);
 
-    bool moving = false;
+    motor_state_t motor_state = MOTOR_STOPPED;
+    uint32_t pause_deadline = 0;
     while (1) {
         uint8_t status = (uint8_t)as560xGetStatus();
         if (!(status & AS560x_STATUS_MAGNET_DETECTED)) {
@@ -72,22 +81,38 @@ void servo_core1_entry(void) {
         if (g_params.angle_reversed) angle = 360 - angle;
         int angle_delta = target_angle - angle;
         int angle_delta_abs = abs(angle_delta);
-        int angle_tolerance = moving ? g_params.angle_tolerance : g_params.dead_angle;
+        bool is_moving = (motor_state == MOTOR_FORWARD || motor_state == MOTOR_REVERSE || motor_state == MOTOR_PAUSING);
+        int angle_tolerance = is_moving ? g_params.angle_tolerance : g_params.dead_angle;
 
         int pwm_a, pwm_b;
         if (angle_delta_abs > angle_tolerance) {
             gpio_put(LED_PIN, 1);
-            moving = true;
-            int motor_pwm = (angle_delta_abs > g_params.slow_angle) ? g_params.fast_pwm : g_params.slow_pwm;
-            if (angle_delta > 0) {
-                pwm_a = motor_pwm; pwm_b = 0;
+            motor_state_t wanted = (angle_delta > 0) ? MOTOR_FORWARD : MOTOR_REVERSE;
+
+            if (motor_state == MOTOR_PAUSING) {
+                /* Wait for pause to finish */
+                if (to_ms_since_boot(get_absolute_time()) >= pause_deadline) {
+                    motor_state = wanted;
+                }
+                pwm_a = 0; pwm_b = 0;
+            } else if (is_moving && motor_state != wanted) {
+                /* Direction change — start pause */
+                motor_state = MOTOR_PAUSING;
+                pause_deadline = to_ms_since_boot(get_absolute_time()) + g_params.slow_start_ms;
+                pwm_a = 0; pwm_b = 0;
             } else {
-                pwm_a = 0; pwm_b = motor_pwm;
+                motor_state = wanted;
+                int motor_pwm = (angle_delta_abs > g_params.slow_angle) ? g_params.fast_pwm : g_params.slow_pwm;
+                if (wanted == MOTOR_FORWARD) {
+                    pwm_a = motor_pwm; pwm_b = 0;
+                } else {
+                    pwm_a = 0; pwm_b = motor_pwm;
+                }
             }
         } else {
             gpio_put(LED_PIN, 0);
             pwm_a = 0; pwm_b = 0;
-            moving = false;
+            motor_state = MOTOR_STOPPED;
         }
         setMotorPwm(pwm_a, pwm_b);
 
