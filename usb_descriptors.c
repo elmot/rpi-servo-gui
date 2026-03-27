@@ -7,13 +7,16 @@
 #define USB_BCD 0x0100
 
 /* ---- Interface / endpoint layout ---- */
-#define ITF_NUM_VENDOR 0
-#define ITF_NUM_TOTAL 1
+#define ITF_NUM_VENDOR  0
+#define ITF_NUM_MSC     1
+#define ITF_NUM_TOTAL   2
 
 #define EPNUM_VENDOR_OUT 0x01
 #define EPNUM_VENDOR_IN  0x81
+#define EPNUM_MSC_OUT    0x02
+#define EPNUM_MSC_IN     0x82
 
-#define CONFIG_TOTAL_LEN (TUD_CONFIG_DESC_LEN + TUD_VENDOR_DESC_LEN)
+#define CONFIG_TOTAL_LEN (TUD_CONFIG_DESC_LEN + TUD_VENDOR_DESC_LEN + TUD_MSC_DESC_LEN)
 
 /* ---- Vendor request codes (used in BOS capabilities and control xfer handler) ---- */
 #define VENDOR_REQUEST_WEBUSB    0x01  /* bRequest for WebUSB GET_URL */
@@ -25,21 +28,21 @@
 /* ---- BOS descriptor sizes ---- */
 #define BOS_TOTAL_LEN (TUD_BOS_DESC_LEN + TUD_BOS_WEBUSB_DESC_LEN + TUD_BOS_MICROSOFT_OS_DESC_LEN)
 
-/* Total size of the MS OS 2.0 descriptor set: 10 + 20 + 132 = 162 (0xA2) */
-#define MS_OS_20_DESC_LEN 0xA2
+/* Total size of the MS OS 2.0 descriptor set:
+ * 10 (set header) + 8 (config subset) + 8 (function subset) + 20 (compat ID) + 132 (reg prop) = 178 (0xB2) */
+#define MS_OS_20_DESC_LEN 0xB2
 
 /* ==========================================================================
  * Device Descriptor
- * USB 2.1 vendor-specific device. Class 0xFF tells the host this device
- * does not conform to any standard USB class — the WinUSB driver is
- * assigned via the MS OS 2.0 compatible ID descriptor below.
+ * Composite USB 2.1 device (vendor + MSC). Device class 0x00 means
+ * "class defined per interface" — each interface declares its own class.
  * ========================================================================== */
 static const tusb_desc_device_t desc_device = {
     .bLength = sizeof(tusb_desc_device_t),
     .bDescriptorType = TUSB_DESC_DEVICE,
     .bcdUSB = 0x0210,  /* USB 2.1 — required for BOS descriptor support */
 
-    .bDeviceClass = TUSB_CLASS_VENDOR_SPECIFIC,  /* 0xFF */
+    .bDeviceClass = 0x00,     /* Composite: class defined per interface */
     .bDeviceSubClass = 0x00,
     .bDeviceProtocol = 0x00,
 
@@ -61,12 +64,14 @@ uint8_t const *tud_descriptor_device_cb(void) {
 
 /* ==========================================================================
  * Configuration Descriptor
- * Single configuration with one vendor-class interface and two bulk
- * endpoints (IN 0x81, OUT 0x01), 64-byte max packet size.
+ * Two interfaces:
+ *   Interface 0: Vendor (WebUSB) — EP OUT 0x01, EP IN 0x81, 64-byte packets
+ *   Interface 1: MSC (read-only FAT16 disk) — EP OUT 0x02, EP IN 0x82, 64-byte packets
  * ========================================================================== */
 static const uint8_t desc_configuration[] = {
     TUD_CONFIG_DESCRIPTOR(1, ITF_NUM_TOTAL, 0, CONFIG_TOTAL_LEN, 0x00, 100),
-    TUD_VENDOR_DESCRIPTOR(ITF_NUM_VENDOR, 4, EPNUM_VENDOR_OUT, EPNUM_VENDOR_IN, 64)
+    TUD_VENDOR_DESCRIPTOR(ITF_NUM_VENDOR, 4, EPNUM_VENDOR_OUT, EPNUM_VENDOR_IN, 64),
+    TUD_MSC_DESCRIPTOR(ITF_NUM_MSC, 5, EPNUM_MSC_OUT, EPNUM_MSC_IN, 64)
 };
 
 uint8_t const *tud_descriptor_configuration_cb(uint8_t index) {
@@ -92,16 +97,21 @@ uint8_t const *tud_descriptor_bos_cb(void) {
 }
 
 /* ==========================================================================
- * Microsoft OS 2.0 Descriptor Set  (162 bytes, flat — no subset headers)
+ * Microsoft OS 2.0 Descriptor Set  (178 bytes, with function subset)
  *
  * Returned when the host sends a vendor request with
  *   bRequest = VENDOR_REQUEST_MICROSOFT (0x02), wIndex = 0x0007.
  *
- * Layout (flat, device-wide):
- *   [10] Set Header           — identifies this as an MS OS 2.0 set
- *   [20] Compatible ID        — "WINUSB" → Windows loads the WinUSB driver
- *   [132] Registry Property   — writes DeviceInterfaceGUIDs into the registry
- *                                so user-mode apps can find the device
+ * Uses configuration + function subset headers so that the WinUSB
+ * compatible ID applies ONLY to interface 0 (vendor). Interface 1 (MSC)
+ * is left alone and gets the standard USB mass storage driver.
+ *
+ * Layout:
+ *   [10] Set Header
+ *   [8]  Configuration Subset Header  (config 0)
+ *     [8]  Function Subset Header     (interface 0 = vendor)
+ *       [20]  Compatible ID           "WINUSB"
+ *       [132] Registry Property       DeviceInterfaceGUIDs
  *
  * GUID: {C56D9F32-245A-44F2-AC18-76E120ABBF31}
  * ========================================================================== */
@@ -111,6 +121,20 @@ static const uint8_t desc_ms_os_20[] = {
     /* wDescriptorType      */ U16_TO_U8S_LE(MS_OS_20_SET_HEADER_DESCRIPTOR),
     /* dwWindowsVersion     */ U32_TO_U8S_LE(0x06030000),  /* Windows 8.1+ */
     /* wTotalLength         */ U16_TO_U8S_LE(MS_OS_20_DESC_LEN),
+
+    /* ---- Configuration Subset Header (8 bytes) ---- */
+    /* wLength              */ U16_TO_U8S_LE(0x0008),
+    /* wDescriptorType      */ U16_TO_U8S_LE(MS_OS_20_SUBSET_HEADER_CONFIGURATION),
+    /* bConfigurationValue  */ 0x00,
+    /* bReserved            */ 0x00,
+    /* wTotalLength         */ U16_TO_U8S_LE(MS_OS_20_DESC_LEN - 0x0A),
+
+    /* ---- Function Subset Header (8 bytes) — targets interface 0 (vendor) only ---- */
+    /* wLength              */ U16_TO_U8S_LE(0x0008),
+    /* wDescriptorType      */ U16_TO_U8S_LE(MS_OS_20_SUBSET_HEADER_FUNCTION),
+    /* bFirstInterface      */ ITF_NUM_VENDOR,
+    /* bReserved            */ 0x00,
+    /* wTotalLength         */ U16_TO_U8S_LE(MS_OS_20_DESC_LEN - 0x0A - 0x08),
 
     /* ---- Compatible ID (20 bytes) — tells Windows to use WinUSB driver ---- */
     /* wLength              */ U16_TO_U8S_LE(0x0014),
@@ -192,14 +216,16 @@ bool tud_vendor_control_xfer_cb(uint8_t rhport, uint8_t stage, const tusb_contro
  * Index 1: manufacturer
  * Index 2: product
  * Index 3: serial number
- * Index 4: interface name
+ * Index 4: vendor interface name
+ * Index 5: MSC interface name
  * ========================================================================== */
 static const char *string_desc_arr[] = {
     (const char[]){0x09, 0x04},  /* Language ID: English US */
-    "Elmot",                     /* Manufacturer */
-    "Elmot Smart Servo",         /* Product */
-    "0001",                      /* Serial */
-    "WebUSB Vendor"              /* Interface */
+    "Elmot",                     /* 1: Manufacturer */
+    "Elmot Smart Servo",         /* 2: Product */
+    "0001",                      /* 3: Serial */
+    "WebUSB Vendor",             /* 4: Vendor interface */
+    "Smart Servo Config"         /* 5: MSC interface */
 };
 
 static uint16_t _desc_str[32];
