@@ -113,6 +113,7 @@
         <h3>PWM Input</h3>
         <div class="slider-row"><label>Low limit</label><input type="range" id="s_pwm_low_limit" min="900" max="2500" step="10" value="1200"><span class="val" id="v_pwm_low_limit">1200</span><span class="unit">&micro;s</span></div>
         <div class="slider-row"><label>High limit</label><input type="range" id="s_pwm_high_limit" min="900" max="2500" step="10" value="1700"><span class="val" id="v_pwm_high_limit">1700</span><span class="unit">&micro;s</span></div>
+        <div class="slider-row"><label>Center</label><span class="val" id="v_pwm_center">1450</span><span class="unit">&micro;s</span><label style="min-width:4em">Range</label><span class="val" id="v_pwm_range">250</span><span class="unit">&micro;s</span></div>
         <div class="warning" id="pwmRangeWarning"></div>
 
         <div class="mock-row">
@@ -282,6 +283,8 @@
     const hi = parseInt(document.getElementById('s_pwm_high_limit').value);
     document.getElementById('pwmRangeWarning').textContent =
         (lo >= hi) ? 'low limit must be < high limit' : '';
+    document.getElementById('v_pwm_center').textContent = ((lo + hi) / 2) | 0;
+    document.getElementById('v_pwm_range').textContent = ((hi - lo) / 2) | 0;
   }
 
   /* ---- Send params (throttled) ---- */
