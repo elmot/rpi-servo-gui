@@ -68,14 +68,24 @@ All parameters are stored as `key=value` text, transferred over USB, and persist
 
 ## Browser UI
 
-Connect the device and open the embedded `index.htm` (served via MSC virtual disk) or navigate to the WebUSB landing page. The UI provides:
+The configuration UI is a single `index.htm` file. It can be accessed in three ways:
 
-- SVG visualization of angle parameters
+1. **From the device** — open the file served via the MSC virtual disk or navigate to the WebUSB landing page
+2. **Online** — visit [smart-servo.elmot.xyz](https://smart-servo.elmot.xyz/) (published via GitHub Pages on every release)
+3. **Locally** — open `index.htm` directly in a browser
+
+The UI is a PWA and works offline once loaded. It provides:
+
+- Visualization of angle parameters
 - Sliders for all parameters with live update
 - PWM power bars
 - PWM mock input for testing without a signal source
 - Real-time telemetry log
 - Save to flash / Reset defaults / Restart device
+
+### GitHub Pages deployment
+
+A GitHub Actions workflow (`.github/workflows/static.yml`) publishes `index.htm` to GitHub Pages each time a release is created. The file is deployed under a path matching the release tag (e.g. `/<tag>/index.htm`). The custom domain `smart-servo.elmot.xyz` is configured via the `CNAME` file.
 
 ## Building
 
